@@ -42,23 +42,20 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-bg px-4 py-12">
+    <div className="theme-seeker flex min-h-full items-center justify-center bg-bg px-4 py-12">
       <div className="w-full max-w-md">
         <div className="mb-7 flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent text-sm font-bold text-white">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
             JC
           </div>
-          <div>
-            <p className="text-base font-semibold tracking-tight">JobCopilot</p>
-            <p className="text-[11px] text-muted">创建账号，开始使用 AI 助手</p>
-          </div>
+          <p className="text-base font-semibold tracking-tight">JobCopilot</p>
         </div>
 
         <div className="card p-6">
           <h1 className="text-xl font-semibold tracking-tight">注册账号</h1>
-          <p className="mt-1 text-xs text-muted">选择你的身份，注册后不可更改。</p>
+          <p className="mt-1 text-xs text-muted">选择身份，注册后不可更改。</p>
 
-          <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+          <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl border border-line bg-neutral-soft p-1">
             {(
               [
                 ["seeker", "我是求职者"],
@@ -70,10 +67,9 @@ export function RegisterPage() {
                 type="button"
                 onClick={() => setRole(value)}
                 className={cn(
-                  "rounded-lg py-2 text-xs font-medium transition-all duration-200",
-                  role === value ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink",
+                  "rounded-lg py-2 text-xs font-medium transition-colors",
+                  role === value ? "bg-surface font-semibold text-ink" : "text-muted hover:text-ink",
                 )}
-                style={{ transitionTimingFunction: "var(--ease-out)" }}
               >
                 {label}
               </button>
@@ -110,7 +106,9 @@ export function RegisterPage() {
             )}
 
             {error && (
-              <p className="rounded-xl bg-[#FDECEC] px-3.5 py-2.5 text-xs text-danger">{error}</p>
+              <p className="rounded-xl border border-danger bg-danger-soft px-3.5 py-2.5 text-xs text-danger">
+                {error}
+              </p>
             )}
 
             <Button type="submit" loading={loading} className="w-full">

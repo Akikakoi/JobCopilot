@@ -5,8 +5,8 @@ import { homePath, useAuth } from "../lib/auth";
 import { Button, Field, Input } from "../components/ui";
 
 const DEMOS = [
-  { label: "求职者 张三", username: "zhangsan", note: "已挂简历 · 可演示匹配" },
-  { label: "招聘方 李 HR", username: "hr-li", note: "星澜科技 · 在招岗位" },
+  { label: "求职者 张三", username: "zhangsan", note: "已挂简历" },
+  { label: "招聘方 李 HR", username: "hr-li", note: "星澜科技" },
 ];
 
 export function LoginPage() {
@@ -16,7 +16,6 @@ export function LoginPage() {
   const [password, setPassword] = useState("demo1234");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [shake, setShake] = useState(0);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -27,85 +26,54 @@ export function LoginPage() {
       navigate(homePath(user.role), { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "登录失败，请重试");
-      setShake((n) => n + 1);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="grid min-h-full lg:grid-cols-[1.1fr_1fr]">
-      <section className="relative hidden overflow-hidden bg-[#0B1230] p-12 text-white lg:flex lg:flex-col">
-        <div className="pointer-events-none absolute -left-24 top-1/3 h-72 w-72 rounded-full bg-primary/30 blur-[90px]" />
-        <div className="pointer-events-none absolute -right-24 top-10 h-72 w-72 rounded-full bg-accent/25 blur-[100px]" />
-
-        <div className="relative flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-sm font-bold ring-1 ring-white/20">
+    <div className="theme-seeker grid min-h-full bg-bg lg:grid-cols-[1.05fr_1fr]">
+      <section className="hidden flex-col justify-between border-r border-line px-12 py-10 lg:flex">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
             JC
           </div>
-          <span className="text-lg font-semibold tracking-tight">JobCopilot</span>
+          <span className="text-base font-semibold">JobCopilot</span>
         </div>
 
-        <div className="relative mt-auto">
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/70">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            双 Agent · 招聘求职双边平台
-          </p>
-          <h1 className="max-w-md text-4xl font-semibold leading-[1.18] tracking-tight">
-            让 AI 帮你
+        <div>
+          <h1 className="max-w-[380px] text-[34px] font-semibold leading-[1.25] tracking-tight">
+            找到合适的岗位，
             <br />
-            找到对的人，和对的岗位
+            也找到合适的人。
           </h1>
-          <p className="mt-5 max-w-md text-sm leading-relaxed text-white/60">
-            自研 Agent Runtime 驱动：简历结构化解析、三段式匹配管线、跨会话长期记忆。
-            求职者与招聘方各自拥有一位懂业务的 AI 助手。
+          <p className="mt-4 max-w-[380px] text-sm leading-relaxed text-muted">
+            求职者与招聘方各自拥有一位 AI 助手：解析简历、计算匹配分、准备面试、筛选候选人。
           </p>
-
-          <div className="mt-10 grid max-w-md grid-cols-3 gap-3">
-            {[
-              ["50", "在招岗位"],
-              ["30", "候选简历"],
-              ["3 段式", "匹配管线"],
-            ].map(([value, label], index) => (
-              <div
-                key={label}
-                className="animate-fade-up rounded-2xl border border-white/10 bg-white/[0.04] p-3.5"
-                style={{ animationDelay: `${index * 70}ms` }}
-              >
-                <p className="text-lg font-semibold">{value}</p>
-                <p className="mt-0.5 text-[11px] text-white/50">{label}</p>
-              </div>
-            ))}
-          </div>
         </div>
 
-        <p className="relative mt-12 text-[11px] text-white/35">
-          学习项目 · 数据为演示用虚构内容 · 不做真实上线
-        </p>
+        <p className="text-[11px] text-muted">演示项目 · 数据为虚构内容</p>
       </section>
 
-      <section className="flex items-center justify-center bg-white px-6 py-12">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent text-sm font-bold text-white">
+      <section className="flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-[360px]">
+          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
               JC
             </div>
+            <span className="text-base font-semibold">JobCopilot</span>
           </div>
 
-          <h2 className="text-2xl font-semibold tracking-tight">登录 JobCopilot</h2>
-          <p className="mt-1.5 text-sm text-muted">选择演示账号快速体验，或使用你的账号登录。</p>
+          <h2 className="text-xl font-semibold tracking-tight">登录</h2>
+          <p className="mt-1 text-xs text-muted">使用用户名和密码进入你的工作台。</p>
 
-          <form
-            key={shake}
-            onSubmit={submit}
-            className={shake ? "mt-7 space-y-4 shake-once" : "mt-7 space-y-4"}
-          >
+          <form onSubmit={submit} className="mt-6 space-y-4">
             <Field label="用户名">
               <Input
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                placeholder="请输入用户名"
                 autoComplete="username"
+                placeholder="用户名"
               />
             </Field>
             <Field label="密码">
@@ -113,13 +81,15 @@ export function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="请输入密码"
                 autoComplete="current-password"
+                placeholder="密码"
               />
             </Field>
 
             {error && (
-              <p className="rounded-xl bg-[#FDECEC] px-3.5 py-2.5 text-xs text-danger">{error}</p>
+              <p className="rounded-xl border border-danger bg-danger-soft px-3.5 py-2.5 text-xs text-danger">
+                {error}
+              </p>
             )}
 
             <Button type="submit" loading={loading} className="w-full">
@@ -127,11 +97,9 @@ export function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 rounded-2xl border border-line bg-slate-50/70 p-3">
-            <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
-              演示账号 · 密码 demo1234
-            </p>
-            <div className="grid gap-2">
+          <div className="mt-8 border-t border-line pt-4">
+            <p className="mb-2 text-[11px] font-semibold text-muted">演示账号 · 密码 demo1234</p>
+            <div className="divide-y divide-line border-y border-line">
               {DEMOS.map((demo) => (
                 <button
                   key={demo.username}
@@ -140,12 +108,11 @@ export function LoginPage() {
                     setUsername(demo.username);
                     setPassword("demo1234");
                   }}
-                  className="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-left transition-all hover:shadow-sm"
-                  style={{ transitionTimingFunction: "var(--ease-out)" }}
+                  className="flex w-full items-center justify-between py-2.5 text-left transition-colors hover:text-primary"
                 >
                   <span>
-                    <span className="block text-xs font-medium text-ink">{demo.label}</span>
-                    <span className="block text-[10px] text-muted">{demo.note}</span>
+                    <span className="block text-xs font-medium">{demo.label}</span>
+                    <span className="block text-[11px] text-muted">{demo.note}</span>
                   </span>
                   <span className="text-[11px] text-primary">填入</span>
                 </button>
@@ -153,10 +120,10 @@ export function LoginPage() {
             </div>
           </div>
 
-          <p className="mt-6 text-center text-xs text-muted">
+          <p className="mt-6 text-xs text-muted">
             还没有账号？
             <Link to="/register" className="ml-1 font-medium text-primary hover:underline">
-              立即注册
+              注册
             </Link>
           </p>
         </div>
