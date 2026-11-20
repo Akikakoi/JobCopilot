@@ -43,7 +43,7 @@ export function InterviewReportView({ interview }: { interview: Interview }) {
               {DIMENSION_LABELS.map(([key, label]) => (
                 <div key={key}>
                   <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-600">{label}</span>
+                    <span className="text-ink">{label}</span>
                     <span className="tabular-nums text-muted">{report.dimensions[key] ?? 0}</span>
                   </div>
                   <div className="mt-1">
@@ -62,11 +62,11 @@ export function InterviewReportView({ interview }: { interview: Interview }) {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-success">亮点</p>
+          <p className="text-[11px] font-semibold text-success">亮点</p>
           <ul className="mt-2 space-y-1.5">
             {report.strengths.length ? (
               report.strengths.map((item) => (
-                <li key={item} className="flex gap-2 text-xs leading-relaxed text-slate-600">
+                <li key={item} className="flex gap-2 text-xs leading-relaxed text-muted">
                   <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-success" />
                   {item}
                 </li>
@@ -77,11 +77,11 @@ export function InterviewReportView({ interview }: { interview: Interview }) {
           </ul>
         </Card>
         <Card className="p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-warning">风险</p>
+          <p className="text-[11px] font-semibold text-warning">风险</p>
           <ul className="mt-2 space-y-1.5">
             {report.risks.length ? (
               report.risks.map((item) => (
-                <li key={item} className="flex gap-2 text-xs leading-relaxed text-slate-600">
+                <li key={item} className="flex gap-2 text-xs leading-relaxed text-muted">
                   <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-warning" />
                   {item}
                 </li>
@@ -94,11 +94,11 @@ export function InterviewReportView({ interview }: { interview: Interview }) {
       </div>
 
       <Card className="p-5">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">改进建议</p>
+        <p className="text-[11px] font-semibold text-primary">改进建议</p>
         <ul className="mt-2 space-y-1.5">
           {report.suggestions.length ? (
             report.suggestions.map((item) => (
-              <li key={item} className="flex gap-2 text-xs leading-relaxed text-slate-600">
+              <li key={item} className="flex gap-2 text-xs leading-relaxed text-muted">
                 <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
                 {item}
               </li>
@@ -110,28 +110,28 @@ export function InterviewReportView({ interview }: { interview: Interview }) {
       </Card>
 
       <Card className="p-5">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">逐题复盘</p>
-        <div className="mt-3 space-y-3">
+        <p className="text-[11px] font-semibold text-muted">逐题复盘</p>
+        <div className="mt-1 space-y-0">
           {interview.plan.questions.map((question, index) => {
             const answer = answerMap.get(question.id);
             const scored = perQuestion.get(question.id);
             const score = scored?.score ?? answer?.score ?? 0;
             return (
-              <div key={question.id} className="rounded-xl border border-line p-3.5">
+              <div key={question.id} className="border-b border-line py-3 last:border-b-0 last:pb-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-semibold text-slate-400">Q{index + 1}</span>
+                  <span className="text-[11px] font-semibold tabular-nums text-muted">Q{index + 1}</span>
                   <Badge tone="default">{CATEGORY_LABELS[question.category] || question.category}</Badge>
                   <span className="flex-1" />
                   <Badge tone={toneFor(score)}>{Math.round(score)} 分</Badge>
                 </div>
                 <p className="mt-1.5 text-xs font-medium leading-relaxed text-ink">{question.question}</p>
                 {answer?.answer && (
-                  <p className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-2.5 text-[11px] leading-relaxed text-slate-600">
+                  <p className="mt-2 whitespace-pre-wrap border-l-2 border-line pl-2.5 text-[11px] leading-relaxed text-muted">
                     {answer.answer}
                   </p>
                 )}
                 {(scored?.rationale || answer?.rationale) && (
-                  <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                  <p className="mt-2 text-[11px] leading-relaxed text-muted">
                     点评：{scored?.rationale || answer?.rationale}
                   </p>
                 )}

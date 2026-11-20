@@ -145,3 +145,30 @@ export function BellIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function BookmarkIcon({
+  filled = false,
+  ...props
+}: SVGProps<SVGSVGElement> & { filled?: boolean }) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 4.5h12v16l-6-4-6 4v-16Z" fill={filled ? "currentColor" : "none"} />
+    </svg>
+  );
+}
+
+export function CloseIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
+export function ArrowLeftIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M19 12H5M11 18l-6-6 6-6" />
+    </svg>
+  );
+}

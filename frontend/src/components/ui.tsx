@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { CloseIcon } from "./icons";
 import {
   useEffect,
   useRef,
@@ -128,10 +129,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-white/60 px-6 py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-xl text-slate-400">
-        ◍
-      </div>
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface px-6 py-16 text-center">
       <p className="text-sm font-semibold text-ink">{title}</p>
       {description && <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
@@ -184,7 +182,7 @@ export function ScoreRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#EAF0FB"
+          stroke="var(--neutral-soft)"
           strokeWidth={9}
         />
         <circle
@@ -244,7 +242,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4 backdrop-blur-[2px] animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 animate-fade-in"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -252,7 +250,7 @@ export function Modal({
       <div
         ref={ref}
         className={cn(
-          "w-full animate-scale-in rounded-3xl border border-line bg-white shadow-md",
+          "w-full animate-fade-in rounded-2xl border border-line bg-surface shadow-md",
           width,
         )}
       >
@@ -260,10 +258,10 @@ export function Modal({
           <h3 className="text-base font-semibold text-ink">{title}</h3>
           <button
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-muted transition-colors hover:bg-slate-100 hover:text-ink"
+            className="rounded-lg p-1.5 text-muted transition-colors hover:bg-neutral-soft hover:text-ink"
             aria-label="关闭"
           >
-            ✕
+            <CloseIcon className="h-4 w-4" />
           </button>
         </div>
         <div className="max-h-[65vh] overflow-y-auto px-6 py-5">{children}</div>
@@ -286,10 +284,10 @@ export function ProgressBar({
 }) {
   const ratio = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-soft">
       <div
         className={cn(
-          "h-full rounded-full transition-[width] duration-700",
+          "h-full rounded-full transition-[width] duration-500",
           tone === "primary" && "bg-primary",
           tone === "success" && "bg-success",
           tone === "warning" && "bg-warning",

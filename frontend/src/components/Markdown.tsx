@@ -14,7 +14,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     }
     if (part.startsWith("`") && part.endsWith("`")) {
       return (
-        <code key={key} className="rounded bg-slate-100 px-1 py-0.5 text-[12px] text-slate-700">
+        <code key={key} className="rounded bg-neutral-soft px-1 py-0.5 text-[12px] text-ink">
           {part.slice(1, -1)}
         </code>
       );
@@ -34,7 +34,7 @@ export function Markdown({ text }: { text: string }) {
       <ul key={`ul-${blocks.length}`} className="my-1.5 space-y-1 pl-1">
         {listBuffer.map((item, index) => (
           <li key={index} className="flex gap-2">
-            <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-slate-400" />
+            <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-muted" />
             <span>{renderInline(item, `li-${blocks.length}-${index}`)}</span>
           </li>
         ))}
@@ -68,5 +68,5 @@ export function Markdown({ text }: { text: string }) {
   });
   flushList();
 
-  return <div className="text-sm text-slate-700">{blocks}</div>;
+  return <div className="text-sm text-ink">{blocks}</div>;
 }

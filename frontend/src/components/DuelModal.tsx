@@ -20,7 +20,7 @@ const SPEAKER = {
     sub: "候选人代理",
     avatar: "求",
     avatarClass: "bg-primary text-white",
-    bubble: "rounded-tl-md border-line bg-white",
+    bubble: "rounded-tl-sm border-line bg-surface",
     labelClass: "text-primary",
   },
   employer: {
@@ -28,7 +28,7 @@ const SPEAKER = {
     sub: "企业代理",
     avatar: "招",
     avatarClass: "bg-ink text-white",
-    bubble: "rounded-tr-md border-slate-200 bg-[#F8FAFC]",
+    bubble: "rounded-tr-sm border-line bg-neutral-soft",
     labelClass: "text-ink",
   },
 } as const;
@@ -189,13 +189,12 @@ export function DuelModal({
         </div>
       }
     >
-      <div className="mb-4 rounded-xl border border-line bg-[#F6F8FE] px-3.5 py-2.5 text-[11px] leading-relaxed text-slate-500">
-        <span className="font-medium text-ink">{jobTitle}</span> · 候选人 {candidateName}。
-        双方 Agent 会基于真实简历与岗位数据自主问答，工具调用对用户透明可见。
+      <div className="mb-4 border-l-2 border-primary bg-neutral-soft px-3.5 py-2.5 text-[11px] leading-relaxed text-muted">
+        <span className="font-medium text-ink">{jobTitle}</span> · 候选人 {candidateName}
       </div>
 
       {error && (
-        <p className="mb-3 rounded-xl bg-[#FDECEC] px-3 py-2 text-xs text-danger">{error}</p>
+        <p className="mb-3 rounded-xl border border-danger bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>
       )}
 
       <div className="space-y-4">
@@ -222,15 +221,14 @@ export function DuelModal({
                   )}
                 >
                   <span className={cn("text-[11px] font-semibold", meta.labelClass)}>{meta.label}</span>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-[10px] text-muted">
                     {meta.sub} · 第 {turn.round} 轮
                   </span>
                 </div>
                 <div
                   className={cn(
-                    "mt-1 rounded-2xl border px-3.5 py-2.5",
+                    "mt-1 rounded-xl border px-3.5 py-2.5",
                     meta.bubble,
-                    turn.streaming && !turn.content && "thinking",
                   )}
                 >
                   {turn.content ? (
@@ -239,7 +237,7 @@ export function DuelModal({
                       {turn.streaming && <span className="caret" />}
                     </div>
                   ) : turn.streaming ? (
-                    <span className="text-xs text-slate-400">思考中…</span>
+                    <span className="text-xs text-muted">思考中…</span>
                   ) : (
                     <span className="text-xs text-muted">（本轮无内容）</span>
                   )}
@@ -251,7 +249,7 @@ export function DuelModal({
         })}
 
         {running && turns.length === 0 && (
-          <div className="flex items-center gap-2 rounded-xl border border-dashed border-line px-4 py-6 text-xs text-muted thinking">
+          <div className="flex items-center gap-2 rounded-xl border border-dashed border-line px-4 py-6 text-xs text-muted">
             双方 Agent 正在加载简历与岗位数据…
           </div>
         )}

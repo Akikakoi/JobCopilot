@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ToolTrace } from "../lib/types";
-import { ChevronIcon } from "./icons";
+import { CheckIcon, ChevronIcon } from "./icons";
 import { cn } from "./ui";
 
 export const TOOL_LABELS: Record<string, string> = {
@@ -30,21 +30,21 @@ export function ToolTraceList({ traces }: { traces: ToolTrace[] }) {
   const running = traces.some((trace) => trace.status === "running");
 
   return (
-    <div className="mt-2 rounded-xl border border-line bg-slate-50/80">
+    <div className="mt-2 rounded-lg border border-line bg-neutral-soft">
       <button
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-slate-500"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-muted"
       >
         <span
           className={cn(
             "flex h-4 w-4 items-center justify-center rounded-full",
-            running ? "animate-spin border border-primary/30 border-t-primary" : "bg-[#EAF8F0] text-success",
+            running ? "animate-spin border border-line border-t-primary" : "bg-success-soft text-success",
           )}
         >
-          {!running && "✓"}
+          {!running && <CheckIcon className="h-2.5 w-2.5" />}
         </span>
         <span className="flex-1">{running ? "正在调用工具…" : `已调用 ${traces.length} 个工具`}</span>
-        <span className="text-[10px] text-slate-400">
+        <span className="text-[10px] text-muted">
           {traces.map((t) => TOOL_LABELS[t.name] || t.name).join(" · ")}
         </span>
         <ChevronIcon className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
@@ -52,16 +52,16 @@ export function ToolTraceList({ traces }: { traces: ToolTrace[] }) {
       {open && (
         <div className="space-y-2 border-t border-line px-3 py-2">
           {traces.map((trace) => (
-            <div key={trace.id} className="rounded-lg bg-white p-2">
+            <div key={trace.id} className="border-l-2 border-line pl-2">
               <p className="text-[11px] font-medium text-ink">
                 {TOOL_LABELS[trace.name] || trace.name}
-                <span className="ml-1.5 font-normal text-slate-400">{trace.name}</span>
+                <span className="ml-1.5 font-normal text-muted">{trace.name}</span>
               </p>
-              <p className="mt-1 break-all text-[10px] text-slate-500">
+              <p className="mt-1 break-all text-[10px] text-muted">
                 参数：{JSON.stringify(trace.args)}
               </p>
               {trace.result && (
-                <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-50 p-1.5 text-[10px] leading-relaxed text-slate-500">
+                <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all rounded bg-surface p-1.5 text-[10px] leading-relaxed text-muted">
                   {trace.result}
                 </pre>
               )}

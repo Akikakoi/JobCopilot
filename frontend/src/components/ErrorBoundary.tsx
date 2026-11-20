@@ -23,8 +23,8 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       return (
         <div className="flex min-h-full items-center justify-center bg-bg px-6 py-16">
-          <div className="w-full max-w-md rounded-2xl border border-line bg-white p-8 text-center shadow-sm">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FDECEC] text-xl text-danger">
+          <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-8 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-danger-soft text-xl text-danger">
               !
             </div>
             <h1 className="mt-4 text-lg font-semibold">页面出了点问题</h1>
