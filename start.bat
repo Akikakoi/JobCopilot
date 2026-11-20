@@ -40,7 +40,7 @@ if errorlevel 1 (
     echo [1/2] 启动后端 http://127.0.0.1:8000 ...
     start "JobCopilot Backend" /D "%ROOT%backend" "%PY%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ) else (
-    echo [1/2] 端口 8000 已在监听，跳过后端启动。
+    echo [1/2] 端口 8000 已在运行，跳过后端启动
 )
 
 netstat -ano | findstr ":5180" | findstr "LISTENING" >nul
@@ -48,11 +48,11 @@ if errorlevel 1 (
     echo [2/2] 启动前端 http://127.0.0.1:5180 ...
     start "JobCopilot Frontend" /D "%ROOT%frontend" cmd /k "npm run dev"
 ) else (
-    echo [2/2] 端口 5180 已在监听，跳过前端启动。
+    echo [2/2] 端口 5180 已在运行，跳过前端启动
 )
 
 echo.
-echo 正在等待服务就绪...
+echo 等待服务启动...
 timeout /t 4 /nobreak >nul
 start "" http://127.0.0.1:5180
 
@@ -60,7 +60,7 @@ echo.
 echo 启动完成：
 echo   前端  http://127.0.0.1:5180
 echo   接口  http://127.0.0.1:8000/docs
-echo   账号  zhangsan / demo1234（求职者）、hr-li / demo1234（招聘方）
+echo   账号  zhangsan / demo1234（求职者）  hr-li / demo1234（招聘方）
 echo.
-echo 关闭弹出的两个服务窗口即可停止服务。
+echo 关闭本窗口不会停止服务，请手动关闭服务窗口
 pause
