@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { AppNotification } from "../lib/types";
@@ -14,7 +13,6 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +74,7 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
     setOpen(false);
     const jobId = notification.payload?.job_id;
     if (jobId) {
-      navigate(`/seeker/jobs/${jobId}`);
+      window.open(`/seeker/jobs/${jobId}`, "_blank", "noopener,noreferrer");
     }
   };
 
@@ -92,13 +90,13 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
               width: PANEL_WIDTH,
               zIndex: 9999,
             }}
-            className="animate-scale-in overflow-hidden rounded-2xl border border-line bg-white shadow-[0_24px_48px_-16px_rgba(15,23,42,0.28)]"
+            className="animate-fade-in overflow-hidden rounded-xl border border-line bg-surface shadow-md"
           >
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <div className="flex items-center gap-2">
                 <p className="text-xs font-semibold">通知</p>
                 {unread > 0 && (
-                  <span className="rounded-full bg-[#FDECEC] px-1.5 py-0.5 text-[10px] font-medium text-danger">
+                  <span className="rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-medium text-danger">
                     {unread} 条未读
                   </span>
                 )}
@@ -119,7 +117,7 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
               )}
               {!query.isLoading && items.length === 0 && (
                 <div className="px-4 py-10 text-center">
-                  <p className="text-xs font-medium text-slate-600">暂无通知</p>
+                  <p className="text-xs font-medium text-ink">暂无通知</p>
                   <p className="mt-1 text-[11px] leading-relaxed text-muted">
                     创建岗位订阅后，新发布的匹配岗位会在这里提醒你。
                   </p>
@@ -130,14 +128,14 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
                   key={notification.id}
                   onClick={() => void openNotification(notification)}
                   className={cn(
-                    "flex w-full gap-2.5 border-b border-line/70 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50",
-                    !notification.read && "bg-[#F7F9FF]",
+                    "flex w-full gap-2.5 border-b border-line px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-neutral-soft",
+                    !notification.read && "bg-primary-soft",
                   )}
                 >
                   <span
                     className={cn(
                       "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
-                      notification.read ? "bg-slate-300" : "bg-primary",
+                      notification.read ? "bg-line" : "bg-primary",
                     )}
                   />
                   <span className="min-w-0 flex-1">
@@ -158,7 +156,7 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
                       )}
                     </span>
                     {notification.payload?.subscription_name && (
-                      <span className="mt-0.5 block text-[10px] text-slate-400">
+                      <span className="mt-0.5 block text-[10px] text-muted">
                         来自订阅「{notification.payload.subscription_name}」
                       </span>
                     )}
@@ -176,7 +174,7 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
       <button
         ref={buttonRef}
         onClick={() => setOpen((value) => !value)}
-        className="relative rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-ink"
+        className="relative rounded-lg p-1.5 text-muted transition-colors hover:bg-neutral-soft hover:text-ink"
         title="通知"
         aria-label="通知"
       >

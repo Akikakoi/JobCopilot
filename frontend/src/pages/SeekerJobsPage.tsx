@@ -1,37 +1,22 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { Job, MatchItem, Resume } from "../lib/types";
-import { ArrowRightIcon, SearchIcon } from "../components/icons";
+import { ArrowRightIcon, BookmarkIcon, SearchIcon } from "../components/icons";
 import { Badge, Button, EmptyState, Input, Skeleton, cn } from "../components/ui";
 
-function CompanyAvatar({ name }: { name: string }) {
-  return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 text-sm font-semibold text-slate-500">
-      {name.slice(0, 1)}
-    </div>
-  );
-}
-
 function ScorePill({ score }: { score: number }) {
-  const tone = score >= 80 ? "success" : score >= 60 ? "primary" : "warning";
+  const tone = score >= 80 ? "text-success" : score >= 60 ? "text-primary" : "text-warning";
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums",
-        tone === "success" && "bg-[#EAF8F0] text-success",
-        tone === "primary" && "bg-[#EEF3FF] text-primary",
-        tone === "warning" && "bg-[#FDF3E7] text-warning",
-      )}
-    >
-      {Math.round(score)} 分匹配
+    <span className="inline-flex items-baseline gap-1 text-xs">
+      <span className={cn("font-semibold tabular-nums", tone)}>{Math.round(score)}</span>
+      <span className="text-muted">匹配</span>
     </span>
   );
 }
 
 export function SeekerJobsPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"match" | "all">("match");
   const [draft, setDraft] = useState({ keywords: "", location: "", salary_min: "" });
@@ -89,16 +74,8 @@ export function SeekerJobsPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
       <header className="animate-fade-up">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-          Job Matching
-        </p>
-        <div className="mt-1.5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-[26px] font-semibold tracking-tight">发现适合你的机会</h1>
-            <p className="mt-1 text-sm text-muted">
-              三段式匹配管线：向量召回 → 规则精排 → AI 解读，分数透明可解释。
-            </p>
-          </div>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h1 className="text-[26px] font-semibold tracking-tight">找岗位</h1>
           <Link to="/seeker/resume">
             <Button variant="ghost" size="sm">
               更新简历
@@ -109,7 +86,7 @@ export function SeekerJobsPage() {
 
       <form onSubmit={submitSearch} className="mt-6 flex flex-wrap gap-2 animate-fade-up">
         <div className="relative min-w-[220px] flex-1">
-          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <Input
             className="pl-9"
             placeholder="搜索岗位、技能或公司，如 Python"
@@ -123,7 +100,7 @@ export function SeekerJobsPage() {
           onChange={(event) => setDraft({ ...draft, location: event.target.value })}
         >
           <option value="">全部城市</option>
-          {["上海", "北京", "深圳", "杭州", "广州", "成都", "远程"].map((city) => (
+          {["上海", "北京", "深圳", "杭州", "广州", "成都", "苏州", "武汉", "南京", "西安", "远程"].map((city) => (
             <option key={city} value={city}>
               {city}
             </option>
@@ -146,7 +123,7 @@ export function SeekerJobsPage() {
         </Button>
       </form>
 
-      <div className="mt-5 flex items-center gap-1 rounded-xl border border-line bg-white p-1 animate-fade-up md:w-fit">
+      <div className="mt-5 flex items-center gap-1 rounded-xl border border-line bg-surface p-1 animate-fade-up md:w-fit">
         {(
           [
             ["match", "智能匹配"],
@@ -157,10 +134,9 @@ export function SeekerJobsPage() {
             key={value}
             onClick={() => setTab(value)}
             className={cn(
-              "rounded-lg px-4 py-1.5 text-xs font-medium transition-all duration-200",
-              tab === value ? "bg-[#EEF3FF] text-primary" : "text-muted hover:text-ink",
+              "rounded-lg px-4 py-1.5 text-xs font-medium transition-colors",
+              tab === value ? "bg-primary-soft text-primary" : "text-muted hover:text-ink",
             )}
-            style={{ transitionTimingFunction: "var(--ease-out)" }}
           >
             {label}
           </button>
@@ -176,7 +152,7 @@ export function SeekerJobsPage() {
         {tab === "match" && !resumeQuery.isLoading && !resumeQuery.data?.has_embedding && (
           <EmptyState
             title="先添加一份简历，才能开启智能匹配"
-            description="上传 PDF / DOCX 或粘贴简历文本，AI 会抽取结构化信息并生成向量，然后为你计算岗位匹配度。"
+            description="上传 PDF / DOCX 或粘贴简历文本，AI 会抽取结构化信息并计算岗位匹配度。"
             action={
               <Link to="/seeker/resume">
                 <Button>去添加简历</Button>
@@ -200,7 +176,7 @@ export function SeekerJobsPage() {
         {tab === "match" && resumeQuery.data?.has_embedding && (
           <>
             {matchQuery.isError && (
-              <div className="rounded-2xl bg-[#FDECEC] px-4 py-3 text-sm text-danger">
+              <div className="rounded-2xl border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">
                 {(matchQuery.error as Error).message}
               </div>
             )}
@@ -209,14 +185,14 @@ export function SeekerJobsPage() {
             )}
             <div className="grid gap-3 md:grid-cols-2 stagger">
               {matchQuery.data?.items.map((job) => (
-                <article
+                <a
                   key={job.id}
-                  onClick={() => navigate(`/seeker/jobs/${job.id}`)}
-                  className="group cursor-pointer rounded-2xl border border-line bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                  style={{ transitionTimingFunction: "var(--ease-out)" }}
+                  href={`/seeker/jobs/${job.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block cursor-pointer rounded-2xl border border-line bg-surface p-5 transition-colors hover:border-primary"
                 >
-                  <div className="flex items-start gap-3">
-                    <CompanyAvatar name={job.company_name} />
+                  <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="truncate text-[15px] font-semibold group-hover:text-primary">
@@ -245,29 +221,35 @@ export function SeekerJobsPage() {
                       <ScorePill score={job.match_score} />
                       <button
                         onClick={(event) => {
+                          event.preventDefault();
                           event.stopPropagation();
                           toggleFeedback(job, "save");
                         }}
                         className={cn(
-                          "rounded-lg px-2 py-1 text-[11px] transition-colors",
+                          "flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] transition-colors",
                           job.my_feedback === "save"
-                            ? "bg-[#EAF8F0] font-medium text-success"
-                            : "text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+                            ? "bg-success-soft font-medium text-success"
+                            : "text-muted hover:text-ink",
                         )}
                         title="收藏岗位"
                       >
-                        {job.my_feedback === "save" ? "★ 已收藏" : "☆ 收藏"}
+                        <BookmarkIcon
+                          className="h-3.5 w-3.5"
+                          filled={job.my_feedback === "save"}
+                        />
+                        {job.my_feedback === "save" ? "已收藏" : "收藏"}
                       </button>
                       <button
                         onClick={(event) => {
+                          event.preventDefault();
                           event.stopPropagation();
                           toggleFeedback(job, "dislike");
                         }}
                         className={cn(
                           "rounded-lg px-2 py-1 text-[11px] transition-colors",
                           job.my_feedback === "dislike"
-                            ? "bg-[#FDECEC] font-medium text-danger"
-                            : "text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+                            ? "bg-danger-soft font-medium text-danger"
+                            : "text-muted hover:text-ink",
                         )}
                         title="不感兴趣"
                       >
@@ -285,7 +267,7 @@ export function SeekerJobsPage() {
                         还差：{job.breakdown.skills_required.missing.slice(0, 3).join("、")}
                       </p>
                     )}
-                </article>
+                </a>
               ))}
             </div>
           </>
@@ -298,14 +280,14 @@ export function SeekerJobsPage() {
             )}
             <div className="grid gap-3 md:grid-cols-2 stagger">
               {jobsQuery.data?.items.map((job) => (
-                <article
+                <a
                   key={job.id}
-                  onClick={() => navigate(`/seeker/jobs/${job.id}`)}
-                  className="group cursor-pointer rounded-2xl border border-line bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                  style={{ transitionTimingFunction: "var(--ease-out)" }}
+                  href={`/seeker/jobs/${job.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block cursor-pointer rounded-2xl border border-line bg-surface p-5 transition-colors hover:border-primary"
                 >
-                  <div className="flex items-start gap-3">
-                    <CompanyAvatar name={job.company_name} />
+                  <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="truncate text-[15px] font-semibold group-hover:text-primary">
@@ -335,15 +317,11 @@ export function SeekerJobsPage() {
                       查看详情 <ArrowRightIcon className="h-3.5 w-3.5" />
                     </span>
                   </div>
-                </article>
+                </a>
               ))}
             </div>
           </>
         )}
-      </div>
-
-      <div className="mt-10 rounded-2xl border border-dashed border-line bg-white/60 px-6 py-4 text-center text-xs text-muted">
-        匹配分 = 必需技能 40 + 加分技能 10 + 年限 20 + 地点 15 + 薪资 15，满分 100
       </div>
     </div>
   );

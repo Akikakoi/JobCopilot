@@ -28,12 +28,12 @@ function Stepper({ status }: { status: string }) {
               <span
                 className={cn(
                   "flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-semibold transition-colors duration-300",
-                  done ? "border-primary bg-primary text-white" : "border-line bg-white text-slate-300",
+                  done ? "border-primary bg-primary text-white" : "border-line bg-surface text-muted",
                 )}
               >
                 {index + 1}
               </span>
-              <span className={cn("whitespace-nowrap text-[10px]", done ? "text-primary" : "text-slate-400")}>
+              <span className={cn("whitespace-nowrap text-[10px]", done ? "text-primary" : "text-muted")}>
                 {meta.label}
               </span>
             </div>
@@ -61,9 +61,7 @@ export function ApplicationsPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 md:px-8">
       <header className="animate-fade-up">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Applications</p>
-        <h1 className="mt-1.5 text-[26px] font-semibold tracking-tight">我的投递</h1>
-        <p className="mt-1 text-sm text-muted">跟踪每一次投递的实时进度与匹配分。</p>
+        <h1 className="text-[26px] font-semibold tracking-tight">我的投递</h1>
       </header>
 
       {appsQuery.isLoading && (
@@ -112,11 +110,14 @@ export function ApplicationsPage() {
                       <p className="text-[10px] text-muted">匹配分</p>
                     </div>
                   )}
-                  <Link to={`/seeker/jobs/${app.job_id}`}>
-                    <Button variant="ghost" size="sm">
-                      详情 <ArrowRightIcon className="h-3.5 w-3.5" />
-                    </Button>
-                  </Link>
+                  <a
+                    href={`/seeker/jobs/${app.job_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:border-muted hover:bg-neutral-soft"
+                  >
+                    详情 <ArrowRightIcon className="h-3.5 w-3.5" />
+                  </a>
                 </div>
               </div>
 
@@ -125,7 +126,7 @@ export function ApplicationsPage() {
               </div>
 
               {app.status_note && (
-                <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p className="mt-3 rounded-lg bg-neutral-soft px-3 py-2 text-xs text-muted">
                   招聘方备注：{app.status_note}
                 </p>
               )}

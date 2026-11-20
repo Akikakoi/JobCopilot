@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "../lib/api";
 import type { Job, MatchDetail } from "../lib/types";
-import { ArrowRightIcon } from "../components/icons";
+import { ArrowLeftIcon, ArrowRightIcon, BookmarkIcon } from "../components/icons";
 import {
   Badge,
   Button,
@@ -127,10 +127,10 @@ function MatchPanel({ detail, loading, error }: { detail?: MatchDetail; loading:
 
         {explanation.reasons.length > 0 && (
           <div className="mt-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-success">匹配理由</p>
+            <p className="text-[11px] font-semibold text-success">匹配理由</p>
             <ul className="mt-1.5 space-y-1.5">
               {explanation.reasons.map((item) => (
-                <li key={item} className="flex gap-2 text-xs leading-relaxed text-slate-600">
+                <li key={item} className="flex gap-2 text-xs leading-relaxed text-muted">
                   <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-success" />
                   {item}
                 </li>
@@ -141,10 +141,10 @@ function MatchPanel({ detail, loading, error }: { detail?: MatchDetail; loading:
 
         {explanation.gaps.length > 0 && (
           <div className="mt-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-warning">主要差距</p>
+            <p className="text-[11px] font-semibold text-warning">主要差距</p>
             <ul className="mt-1.5 space-y-1.5">
               {explanation.gaps.map((item) => (
-                <li key={item} className="flex gap-2 text-xs leading-relaxed text-slate-600">
+                <li key={item} className="flex gap-2 text-xs leading-relaxed text-muted">
                   <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-warning" />
                   {item}
                 </li>
@@ -154,11 +154,11 @@ function MatchPanel({ detail, loading, error }: { detail?: MatchDetail; loading:
         )}
 
         {explanation.suggestions.length > 0 && (
-          <div className="mt-4 rounded-xl bg-[#F6F8FE] p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">补齐建议</p>
+          <div className="mt-4 border-l-2 border-primary bg-neutral-soft p-3">
+            <p className="text-[11px] font-semibold text-primary">补齐建议</p>
             <ul className="mt-1.5 space-y-1.5">
               {explanation.suggestions.map((item) => (
-                <li key={item} className="flex gap-2 text-xs leading-relaxed text-slate-600">
+                <li key={item} className="flex gap-2 text-xs leading-relaxed text-muted">
                   <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
                   {item}
                 </li>
@@ -173,7 +173,6 @@ function MatchPanel({ detail, loading, error }: { detail?: MatchDetail; loading:
 
 export function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [applyOpen, setApplyOpen] = useState(false);
   const [coverLetter, setCoverLetter] = useState("");
@@ -246,27 +245,31 @@ export function JobDetailPage() {
   if (!job) {
     return (
       <div className="mx-auto max-w-6xl px-4 py-16 md:px-8">
-        <EmptyState title="岗位不存在" action={<Button onClick={() => navigate(-1)}>返回</Button>} />
+        <EmptyState
+          title="岗位不存在"
+          action={
+            <Link to="/seeker/jobs">
+              <Button>返回岗位列表</Button>
+            </Link>
+          }
+        />
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
-      <button
-        onClick={() => navigate(-1)}
-        className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-muted transition-colors hover:text-ink"
+      <Link
+        to="/seeker/jobs"
+        className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-muted transition-colors hover:text-ink"
       >
-        ← 返回列表
-      </button>
+        <ArrowLeftIcon className="h-3.5 w-3.5" /> 返回岗位列表
+      </Link>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
           <Card className="p-6 animate-fade-up">
             <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 text-lg font-semibold text-slate-500">
-                {job.company_name.slice(0, 1)}
-              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <h1 className="text-xl font-semibold tracking-tight">{job.title}</h1>
@@ -289,7 +292,7 @@ export function JobDetailPage() {
 
             <div className="mt-6 space-y-4">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">必需技能</p>
+                <p className="text-[11px] font-semibold text-muted">必需技能</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {job.required_skills.map((skill) => (
                     <span key={skill} className="chip chip-primary">
@@ -299,7 +302,7 @@ export function JobDetailPage() {
                 </div>
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">加分技能</p>
+                <p className="text-[11px] font-semibold text-muted">加分技能</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {job.preferred_skills.length ? (
                     job.preferred_skills.map((skill) => (
@@ -313,8 +316,8 @@ export function JobDetailPage() {
                 </div>
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">岗位描述</p>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-600">
+                <p className="text-[11px] font-semibold text-muted">岗位描述</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-ink">
                   {job.description}
                 </p>
               </div>
@@ -328,21 +331,22 @@ export function JobDetailPage() {
                 <button
                   onClick={() => toggleFeedback("save")}
                   className={cn(
-                    "rounded-lg px-2.5 py-1.5 text-[11px] transition-colors",
+                    "flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] transition-colors",
                     feedbackAction === "save"
-                      ? "bg-[#EAF8F0] font-medium text-success"
-                      : "text-slate-500 hover:bg-slate-100",
+                      ? "bg-success-soft font-medium text-success"
+                      : "text-muted hover:text-ink",
                   )}
                 >
-                  {feedbackAction === "save" ? "★ 已收藏" : "☆ 收藏"}
+                  <BookmarkIcon className="h-3.5 w-3.5" filled={feedbackAction === "save"} />
+                  {feedbackAction === "save" ? "已收藏" : "收藏"}
                 </button>
                 <button
                   onClick={() => toggleFeedback("dislike")}
                   className={cn(
                     "rounded-lg px-2.5 py-1.5 text-[11px] transition-colors",
                     feedbackAction === "dislike"
-                      ? "bg-[#FDECEC] font-medium text-danger"
-                      : "text-slate-500 hover:bg-slate-100",
+                      ? "bg-danger-soft font-medium text-danger"
+                      : "text-muted hover:text-ink",
                   )}
                 >
                   {feedbackAction === "dislike" ? "已标记不感兴趣" : "不感兴趣"}
@@ -398,7 +402,7 @@ export function JobDetailPage() {
             className="min-h-[140px]"
           />
           {applyError && (
-            <p className="rounded-xl bg-[#FDECEC] px-3.5 py-2.5 text-xs text-danger">{applyError}</p>
+            <p className="rounded-xl border border-danger bg-danger-soft px-3.5 py-2.5 text-xs text-danger">{applyError}</p>
           )}
         </div>
       </Modal>
