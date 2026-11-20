@@ -1,0 +1,19 @@
+# Node.js 后端工程师
+
+- 公司: 远望数科
+- 行业: 数字营销
+- 城市: 远程
+- 薪资: 20-32
+- 经验: 2-5
+- 状态: open
+
+## 必需技能
+Node.js, TypeScript, MongoDB, Redis
+
+## 加分技能
+NestJS, GraphQL
+
+## 岗位描述
+负责「Node.js 后端工程师」相关业务的设计、开发与迭代，与产品、设计、测试协作交付高质量功能；持续优化系统性能与稳定性，参与技术方案评审。
+
+我们希望你熟悉 Node.js、TypeScript、MongoDB、Redis，有良好的工程习惯与沟通能力。
