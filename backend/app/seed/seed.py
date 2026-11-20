@@ -226,10 +226,11 @@ async def seed() -> None:
         print(f"投递记录写入完成：{app_count} 条")
 
         demo_company = companies.get("星澜科技")
+        hr_count = max(len(companies) - 1, 0)
         print("\n演示账号：")
         print("  求职者 zhangsan / demo1234")
         print("  招聘方 hr-li   / demo1234" + (f"（公司：{demo_company.name}）" if demo_company else ""))
-        print(f"  其余 HR 账号 hr-01 ~ hr-09 / demo1234")
+        print(f"  其余 HR 账号 hr-01 ~ hr-{hr_count:02d} / demo1234")
         print(f"  其余求职者 cand02 ~ cand{len(demo_created):02d} / demo1234")
     finally:
         db.close()
