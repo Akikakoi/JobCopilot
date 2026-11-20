@@ -5,7 +5,7 @@ import type { Subscription } from "../lib/types";
 import { BellIcon, PlusIcon } from "../components/icons";
 import { Badge, Button, Card, EmptyState, Field, Input, Skeleton, cn } from "../components/ui";
 
-const CITIES = ["上海", "北京", "深圳", "杭州", "广州", "成都", "远程"];
+const CITIES = ["上海", "北京", "深圳", "杭州", "广州", "成都", "苏州", "武汉", "南京", "西安", "远程"];
 
 const EMPTY_FORM = {
   name: "",
@@ -96,15 +96,7 @@ export function SubscriptionsPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
       <header className="flex flex-wrap items-end justify-between gap-3 animate-fade-up">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-            Subscriptions
-          </p>
-          <h1 className="mt-1.5 text-[26px] font-semibold tracking-tight">岗位订阅</h1>
-          <p className="mt-1 text-sm text-muted">
-            保存筛选条件，新发布的匹配岗位会进入站内通知（同一岗位只提醒一次）。
-          </p>
-        </div>
+        <h1 className="text-[26px] font-semibold tracking-tight">岗位订阅</h1>
         <Button
           variant="soft"
           loading={scanMutation.isPending}
@@ -115,15 +107,19 @@ export function SubscriptionsPage() {
       </header>
 
       {error && (
-        <p className="mt-4 rounded-xl bg-[#FDECEC] px-4 py-3 text-xs text-danger">{error}</p>
+        <p className="mt-4 rounded-xl border border-danger bg-danger-soft px-4 py-3 text-xs text-danger">
+          {error}
+        </p>
       )}
       {notice && (
-        <p className="mt-4 rounded-xl bg-[#EAF8F0] px-4 py-3 text-xs text-success">{notice}</p>
+        <p className="mt-4 rounded-xl border border-success bg-success-soft px-4 py-3 text-xs text-success">
+          {notice}
+        </p>
       )}
 
       <div className="mt-6 grid gap-5 lg:grid-cols-[360px_1fr]">
         <Card className="h-fit p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">新建订阅</p>
+          <p className="text-[11px] font-semibold text-muted">新建订阅</p>
           <div className="mt-3 space-y-3.5">
             <Field label="订阅名称">
               <Input
@@ -237,7 +233,7 @@ export function SubscriptionsPage() {
                           <span className="text-[11px] text-muted">全部新岗位</span>
                         )}
                     </div>
-                    <p className="mt-2 text-[11px] text-slate-400">
+                    <p className="mt-2 text-[11px] text-muted">
                       上次扫描：
                       {subscription.last_checked_at
                         ? new Date(subscription.last_checked_at).toLocaleString("zh-CN")
@@ -260,7 +256,7 @@ export function SubscriptionsPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-danger hover:bg-[#FDECEC]"
+                      className="text-danger hover:bg-danger-soft"
                       disabled={deleteMutation.isPending}
                       onClick={() => {
                         if (window.confirm(`删除订阅「${subscription.name}」？`)) {

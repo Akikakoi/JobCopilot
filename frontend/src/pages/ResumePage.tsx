@@ -13,24 +13,24 @@ import {
   cn,
 } from "../components/ui";
 
-const STEPS = ["抽取文本", "LLM 结构化", "生成向量"];
+const STEPS = ["读取文本", "抽取信息", "更新档案"];
 
 function ParsingOverlay() {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-      <Card className="w-[320px] p-6 thinking rounded-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <Card className="w-[320px] p-6">
         <p className="text-sm font-semibold">正在解析简历</p>
         <p className="mt-1 text-xs text-muted">通常需要 5-15 秒，请稍候</p>
         <div className="mt-5 space-y-3">
           {STEPS.map((step, index) => (
             <div key={step} className="flex items-center gap-3 text-xs">
               <span
-                className="flex h-5 w-5 items-center justify-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-primary"
-                style={{ animation: "pulse 1.4s ease-in-out infinite", animationDelay: `${index * 160}ms` }}
+                className="flex h-5 w-5 items-center justify-center rounded-full bg-primary-soft text-[10px] font-semibold text-primary"
+                style={{ animation: "pulse-soft 1.4s ease-in-out infinite", animationDelay: `${index * 160}ms` }}
               >
                 {index + 1}
               </span>
-              <span className="text-slate-600">{step}</span>
+              <span className="text-muted">{step}</span>
             </div>
           ))}
         </div>
@@ -46,7 +46,7 @@ function StructuredView({ resume }: { resume: Resume }) {
   return (
     <div className="space-y-4 animate-fade-up">
       <Card className="overflow-hidden">
-        <div className="border-b border-line bg-gradient-to-r from-[#F7F9FF] to-white px-6 py-5">
+        <div className="border-b border-line px-6 py-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -71,7 +71,7 @@ function StructuredView({ resume }: { resume: Resume }) {
         </div>
 
         <div className="px-6 py-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">技能标签</p>
+          <p className="text-[11px] font-semibold text-muted">技能标签</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {(s.skills || []).length ? (
               s.skills.map((skill) => (
@@ -88,7 +88,7 @@ function StructuredView({ resume }: { resume: Resume }) {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">教育经历</p>
+          <p className="text-[11px] font-semibold text-muted">教育经历</p>
           <div className="mt-3 space-y-3">
             {(s.education || []).length ? (
               s.education.map((edu, index) => (
@@ -97,7 +97,7 @@ function StructuredView({ resume }: { resume: Resume }) {
                   <p className="text-xs text-muted">
                     {edu.major} · {edu.degree}
                   </p>
-                  <p className="text-[11px] text-slate-400">{edu.period}</p>
+                  <p className="text-[11px] text-muted">{edu.period}</p>
                 </div>
               ))
             ) : (
@@ -107,20 +107,20 @@ function StructuredView({ resume }: { resume: Resume }) {
         </Card>
 
         <Card className="p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">工作经历</p>
+          <p className="text-[11px] font-semibold text-muted">工作经历</p>
           <div className="mt-3 space-y-4">
             {(s.work_experience || []).length ? (
               s.work_experience.map((work, index) => (
                 <div key={`${work.company}-${index}`} className="border-l-2 border-line pl-3">
                   <div className="flex items-baseline justify-between gap-2">
                     <p className="text-sm font-medium">{work.company}</p>
-                    <span className="shrink-0 text-[11px] text-slate-400">{work.period}</span>
+                    <span className="shrink-0 text-[11px] text-muted">{work.period}</span>
                   </div>
                   <p className="text-xs text-muted">{work.role}</p>
                   {work.highlights.length > 0 && (
                     <ul className="mt-1.5 space-y-1">
                       {work.highlights.map((item) => (
-                        <li key={item} className="text-xs leading-relaxed text-slate-600">
+                        <li key={item} className="text-xs leading-relaxed text-muted">
                           · {item}
                         </li>
                       ))}
@@ -135,11 +135,11 @@ function StructuredView({ resume }: { resume: Resume }) {
         </Card>
       </div>
 
-      <details className="group rounded-2xl border border-line bg-white px-5 py-3">
+      <details className="group rounded-2xl border border-line bg-surface px-5 py-3">
         <summary className="cursor-pointer list-none text-xs font-medium text-muted transition-colors hover:text-ink">
           查看简历原文（{resume.raw_text.length} 字）
         </summary>
-        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-[11px] leading-relaxed text-slate-600">
+        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-soft p-4 text-[11px] leading-relaxed text-muted">
           {resume.raw_text}
         </pre>
       </details>
@@ -272,24 +272,24 @@ export function ResumePage() {
       {busy && <ParsingOverlay />}
 
       <header className="animate-fade-up">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Resume</p>
-        <h1 className="mt-1.5 text-[26px] font-semibold tracking-tight">我的简历</h1>
-        <p className="mt-1 text-sm text-muted">
-          PDF / DOCX 解析为主，文本粘贴兜底。LLM 抽取为结构化档案，并用于岗位匹配。
-        </p>
+        <h1 className="text-[26px] font-semibold tracking-tight">我的简历</h1>
       </header>
 
       {error && (
-        <div className="mt-5 rounded-xl bg-[#FDECEC] px-4 py-3 text-xs text-danger">{error}</div>
+        <div className="mt-5 rounded-xl border border-danger bg-danger-soft px-4 py-3 text-xs text-danger">
+          {error}
+        </div>
       )}
       {notice && (
-        <div className="mt-5 rounded-xl bg-[#EAF8F0] px-4 py-3 text-xs text-success">{notice}</div>
+        <div className="mt-5 rounded-xl border border-success bg-success-soft px-4 py-3 text-xs text-success">
+          {notice}
+        </div>
       )}
 
       <div className="mt-6 grid gap-5 lg:grid-cols-[380px_1fr]">
         <div className="h-fit space-y-4">
         <Card className="p-5">
-          <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+          <div className="flex items-center gap-1 rounded-xl border border-line bg-neutral-soft p-1">
             {(
               [
                 ["upload", "上传文件"],
@@ -300,10 +300,9 @@ export function ResumePage() {
                 key={value}
                 onClick={() => setTab(value)}
                 className={cn(
-                  "flex-1 rounded-lg py-2 text-xs font-medium transition-all duration-200",
-                  tab === value ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink",
+                  "flex-1 rounded-lg py-2 text-xs font-medium transition-colors",
+                  tab === value ? "bg-surface font-semibold text-ink" : "text-muted hover:text-ink",
                 )}
-                style={{ transitionTimingFunction: "var(--ease-out)" }}
               >
                 {label}
               </button>
@@ -324,12 +323,11 @@ export function ResumePage() {
               }}
               onClick={() => fileRef.current?.click()}
               className={cn(
-                "mt-4 flex cursor-pointer flex-col items-center rounded-2xl border border-dashed border-line bg-slate-50/60 px-5 py-10 text-center transition-all duration-200",
-                dragging && "border-primary bg-[#F3F7FF]",
+                "mt-4 flex cursor-pointer flex-col items-center rounded-xl border border-dashed border-line bg-neutral-soft px-5 py-10 text-center transition-colors",
+                dragging && "border-primary bg-surface",
               )}
-              style={{ transitionTimingFunction: "var(--ease-out)" }}
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-primary shadow-sm">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-line bg-surface text-primary">
                 <UploadIcon className="h-5 w-5" />
               </div>
               <p className="mt-3 text-sm font-medium">拖拽简历到这里，或点击选择</p>
@@ -361,7 +359,7 @@ export function ResumePage() {
             </div>
           )}
 
-          <div className="mt-4 rounded-xl bg-[#F6F8FE] p-3 text-[11px] leading-relaxed text-slate-500">
+          <div className="mt-4 border-l-2 border-line pl-3 text-[11px] leading-relaxed text-muted">
             解析失败的常见原因：扫描版 PDF、双栏排版、非简历内容。可改用文本粘贴。
           </div>
 
@@ -379,8 +377,8 @@ export function ResumePage() {
 
           <Card className="p-4">
             <div className="flex items-center justify-between px-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">版本历史</p>
-              <span className="text-[10px] text-slate-400">
+              <p className="text-[11px] font-semibold text-muted">版本历史</p>
+              <span className="text-[10px] tabular-nums text-muted">
                 {versionsQuery.data?.items.length || 0}
               </span>
             </div>
@@ -388,7 +386,7 @@ export function ResumePage() {
               {versionsQuery.data?.items.map((version) => (
                 <div
                   key={version.id}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-line px-3 py-2"
+                  className="flex items-center justify-between gap-2 border-b border-line px-1 py-2 last:border-b-0"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-xs font-medium">{version.label}</p>
@@ -443,7 +441,7 @@ export function ResumePage() {
               <Card className="p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    <p className="text-[11px] font-semibold text-muted">
                       按岗位优化
                     </p>
                     <p className="mt-0.5 text-[11px] text-muted">
@@ -478,14 +476,14 @@ export function ResumePage() {
                 </div>
 
                 {optimizeError && (
-                  <p className="mt-3 rounded-xl bg-[#FDECEC] px-3 py-2 text-xs text-danger">
+                  <p className="mt-3 rounded-xl border border-danger bg-danger-soft px-3 py-2 text-xs text-danger">
                     {optimizeError}
                   </p>
                 )}
 
                 {optimizeResult && (
                   <div className="mt-4 space-y-3">
-                    <p className="text-xs leading-relaxed text-slate-600">{optimizeResult.summary}</p>
+                    <p className="text-xs leading-relaxed text-muted">{optimizeResult.summary}</p>
 
                     {optimizeResult.missing_skills.length > 0 && (
                       <div>
@@ -504,14 +502,14 @@ export function ResumePage() {
                       <div className="space-y-2">
                         <p className="text-[11px] font-semibold text-primary">表达改写</p>
                         {optimizeResult.rewrites.map((rewrite, index) => (
-                          <div key={index} className="rounded-xl border border-line p-3">
-                            <p className="text-[10px] text-slate-400">{rewrite.target}</p>
+                          <div key={index} className="border-l-2 border-line pl-3">
+                            <p className="text-[10px] text-muted">{rewrite.target}</p>
                             {rewrite.original && (
-                              <p className="mt-1 text-[11px] text-slate-400 line-through">
+                              <p className="mt-1 text-[11px] text-muted line-through">
                                 {rewrite.original}
                               </p>
                             )}
-                            <p className="mt-1 text-xs leading-relaxed text-slate-700">
+                            <p className="mt-1 text-xs leading-relaxed text-ink">
                               {rewrite.suggestion}
                             </p>
                           </div>
@@ -522,7 +520,7 @@ export function ResumePage() {
                     {optimizeResult.suggestions.length > 0 && (
                       <ul className="space-y-1.5">
                         {optimizeResult.suggestions.map((item) => (
-                          <li key={item} className="flex gap-2 text-xs leading-relaxed text-slate-600">
+                          <li key={item} className="flex gap-2 text-xs leading-relaxed text-muted">
                             <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
                             {item}
                           </li>

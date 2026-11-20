@@ -111,17 +111,13 @@ export function InterviewPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
       <header className="animate-fade-up">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Interview</p>
-        <h1 className="mt-1.5 text-[26px] font-semibold tracking-tight">面试训练</h1>
-        <p className="mt-1 text-sm text-muted">
-          基于目标岗位与你的简历生成 6 道题，逐题作答后由 AI 按 rubric 评分并输出报告。
-        </p>
+        <h1 className="text-[26px] font-semibold tracking-tight">面试训练</h1>
       </header>
 
       <div className="mt-6 grid gap-5 lg:grid-cols-[320px_1fr]">
         <div className="space-y-4">
           <Card className="p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">开始新面试</p>
+            <p className="text-[11px] font-semibold text-muted">开始新面试</p>
             <select
               className="input mt-3"
               value={selectedJob}
@@ -148,8 +144,8 @@ export function InterviewPage() {
 
           <Card className="p-4">
             <div className="flex items-center justify-between px-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">历史记录</p>
-              <span className="text-[10px] text-slate-400">{listQuery.data?.items.length || 0}</span>
+              <p className="text-[11px] font-semibold text-muted">历史记录</p>
+              <span className="text-[10px] tabular-nums text-muted">{listQuery.data?.items.length || 0}</span>
             </div>
             <div className="mt-2 space-y-1.5">
               {listQuery.isLoading &&
@@ -164,10 +160,9 @@ export function InterviewPage() {
                     setError("");
                   }}
                   className={cn(
-                    "w-full rounded-xl px-3 py-2.5 text-left transition-colors duration-200",
-                    item.id === activeId ? "bg-[#EEF3FF]" : "hover:bg-slate-50",
+                    "w-full rounded-lg px-3 py-2.5 text-left transition-colors",
+                    item.id === activeId ? "bg-primary-soft" : "hover:bg-neutral-soft",
                   )}
-                  style={{ transitionTimingFunction: "var(--ease-out)" }}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span
@@ -198,7 +193,7 @@ export function InterviewPage() {
 
         <div>
           {error && (
-            <p className="mb-4 rounded-xl bg-[#FDECEC] px-4 py-3 text-xs text-danger">{error}</p>
+            <p className="mb-4 rounded-xl border border-danger bg-danger-soft px-4 py-3 text-xs text-danger">{error}</p>
           )}
 
           {!activeId && (
@@ -296,10 +291,6 @@ export function InterviewPage() {
           )}
         </div>
       </div>
-
-      <p className="mt-8 text-center text-[10px] text-slate-400">
-        面试评分为 AI 练习反馈，不构成真实招聘结论
-      </p>
     </div>
   );
 }

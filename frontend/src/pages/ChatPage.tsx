@@ -75,7 +75,7 @@ function TypingDots() {
       {[0, 1, 2].map((index) => (
         <span
           key={index}
-          className="h-1.5 w-1.5 rounded-full bg-slate-400"
+          className="h-1.5 w-1.5 rounded-full bg-muted"
           style={{
             animation: "blink 1.2s infinite",
             animationDelay: `${index * 160}ms`,
@@ -224,7 +224,7 @@ export function ChatPage() {
         patchAssistant((message) => ({
           ...message,
           streaming: false,
-          content: message.content || `⚠️ ${event.message || "对话失败"}`,
+          content: message.content || `对话失败：${event.message || "请重试"}`,
         }));
       }
     };
@@ -253,12 +253,12 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full min-h-[520px]">
-      <aside className="hidden w-[248px] shrink-0 flex-col border-r border-line bg-white/70 lg:flex">
+      <aside className="hidden w-[248px] shrink-0 flex-col border-r border-line bg-surface lg:flex">
         <div className="flex items-center justify-between px-4 py-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted">会话</p>
+          <p className="text-xs font-semibold text-muted">会话</p>
           <button
             onClick={() => startNewSession()}
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#EEF3FF] text-primary transition-colors hover:bg-[#E2EAFF]"
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-line text-primary transition-colors hover:border-primary"
             title="新会话"
           >
             <PlusIcon className="h-4 w-4" />
@@ -279,10 +279,10 @@ export function ChatPage() {
                 setError("");
               }}
               className={cn(
-                "w-full truncate rounded-xl px-3 py-2.5 text-left text-xs transition-colors duration-200",
+                "w-full truncate rounded-lg px-3 py-2.5 text-left text-xs transition-colors",
                 session.id === sessionId
-                  ? "bg-[#EEF3FF] font-medium text-primary"
-                  : "text-slate-600 hover:bg-slate-50",
+                  ? "bg-primary-soft font-medium text-primary"
+                  : "text-muted hover:bg-neutral-soft hover:text-ink",
               )}
             >
               {session.title}
@@ -299,20 +299,18 @@ export function ChatPage() {
       </aside>
 
       <section className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-3 border-b border-line bg-white/70 px-4 py-3 backdrop-blur md:px-6">
+        <header className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 md:px-6">
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold">
               {role === "employer" ? "AI 招聘助手" : "AI 求职助手"}
             </h1>
-            <p className="truncate text-[11px] text-muted">
-              {currentSession?.title || "新会话"} · 工具调用过程对用户透明可查
-            </p>
+            <p className="truncate text-[11px] text-muted">{currentSession?.title || "新会话"}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => startNewSession()} className="lg:hidden">
               <PlusIcon className="h-3.5 w-3.5" /> 新会话
             </Button>
-            <span className="hidden items-center gap-1.5 rounded-full bg-[#EAF8F0] px-2.5 py-1 text-[10px] font-medium text-success md:inline-flex">
+            <span className="hidden items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[10px] font-medium text-success md:inline-flex">
               <span className="h-1.5 w-1.5 rounded-full bg-success" /> Agent 在线
             </span>
           </div>
@@ -322,24 +320,18 @@ export function ChatPage() {
           <div className="mx-auto max-w-3xl space-y-5">
             {messages.length === 0 && (
               <div className="animate-fade-up py-8 text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-md">
-                  <SparkIcon className="h-6 w-6" />
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-surface text-primary">
+                  <SparkIcon className="h-5 w-5" />
                 </div>
-                <h2 className="mt-4 text-lg font-semibold tracking-tight">
-                  {role === "employer" ? "让招聘助手帮你找人" : "让求职助手帮你找活"}
+                <h2 className="mt-4 text-base font-semibold tracking-tight">
+                  {role === "employer" ? "描述需求，助手开始找人" : "描述偏好，助手开始找岗位"}
                 </h2>
-                <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-muted">
-                  {role === "employer"
-                    ? "发布岗位、排序候选人、推进流程，都可以直接说。"
-                    : "描述你的偏好，助手会调用匹配管线给出真实岗位与解读。"}
-                </p>
                 <div className="mx-auto mt-5 flex max-w-xl flex-wrap justify-center gap-2">
                   {SUGGESTIONS[role].map((suggestion) => (
                     <button
                       key={suggestion}
                       onClick={() => void send(suggestion)}
-                      className="rounded-full border border-line bg-white px-3.5 py-1.5 text-xs text-slate-600 transition-all hover:border-primary/40 hover:text-primary"
-                      style={{ transitionTimingFunction: "var(--ease-out)" }}
+                      className="rounded-lg border border-line bg-surface px-3.5 py-1.5 text-xs text-muted transition-colors hover:border-primary hover:text-primary"
                     >
                       {suggestion}
                     </button>
@@ -351,22 +343,17 @@ export function ChatPage() {
             {messages.map((message) =>
               message.role === "user" ? (
                 <div key={message.key} className="flex justify-end animate-fade-up">
-                  <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm">
+                  <div className="max-w-[80%] rounded-xl rounded-br-sm bg-primary px-4 py-2.5 text-sm leading-relaxed text-white">
                     {message.content}
                   </div>
                 </div>
               ) : (
                 <div key={message.key} className="flex gap-3 animate-fade-up">
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent text-[10px] font-bold text-white">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-[10px] font-bold text-white">
                     AI
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div
-                      className={cn(
-                        "rounded-2xl rounded-tl-md border border-line bg-white px-4 py-3",
-                        message.streaming && !message.content && "thinking",
-                      )}
-                    >
+                    <div className="rounded-xl rounded-tl-sm border border-line bg-surface px-4 py-3">
                       {message.content ? (
                         <div>
                           <Markdown text={message.content} />
@@ -387,12 +374,14 @@ export function ChatPage() {
           </div>
         </div>
 
-        <div className="border-t border-line bg-white/80 px-4 py-3 backdrop-blur md:px-8">
+        <div className="border-t border-line bg-surface px-4 py-3 md:px-8">
           <div className="mx-auto max-w-3xl">
             {error && (
-              <p className="mb-2 rounded-lg bg-[#FDECEC] px-3 py-2 text-[11px] text-danger">{error}</p>
+              <p className="mb-2 rounded-lg border border-danger bg-danger-soft px-3 py-2 text-[11px] text-danger">
+                {error}
+              </p>
             )}
-            <div className="flex items-end gap-2 rounded-2xl border border-line bg-white p-2 shadow-sm focus-within:border-primary/40 focus-within:shadow-[0_0_0_4px_rgba(42,91,255,0.08)]">
+            <div className="flex items-end gap-2 rounded-xl border border-line bg-surface p-2 focus-within:border-primary">
               <textarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
@@ -403,7 +392,7 @@ export function ChatPage() {
                     ? "描述招聘需求，或询问候选人情况…（Enter 发送，Shift+Enter 换行）"
                     : "说说你想找什么样的工作…（Enter 发送，Shift+Enter 换行）"
                 }
-                className="max-h-40 min-h-[38px] flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-400"
+                className="max-h-40 min-h-[38px] flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted"
               />
               <Button
                 size="sm"
@@ -415,9 +404,6 @@ export function ChatPage() {
                 <SendIcon className="h-4 w-4" />
               </Button>
             </div>
-            <p className="mt-1.5 text-center text-[10px] text-slate-400">
-              Agent 可能会调用工具，执行结果会以折叠面板展示
-            </p>
           </div>
         </div>
       </section>
