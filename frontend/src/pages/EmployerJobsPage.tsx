@@ -7,7 +7,6 @@ import { ArrowRightIcon, PlusIcon } from "../components/icons";
 import {
   Badge,
   Button,
-  Card,
   EmptyState,
   Field,
   Input,
@@ -86,34 +85,40 @@ export function EmployerJobsPage() {
   const update = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
+  const jobs = jobsQuery.data?.items || [];
+  const openCount = jobs.filter((job) => job.status === "open").length;
+  const totalApplicants = jobs.reduce((sum, job) => sum + job.applicant_count, 0);
+
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 md:px-8">
-      <header className="flex flex-wrap items-end justify-between gap-3 animate-fade-up">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Job Management</p>
-          <h1 className="mt-1.5 text-[26px] font-semibold tracking-tight">岗位管理</h1>
-          <p className="mt-1 text-sm text-muted">发布、维护岗位，查看每个岗位的候选人。</p>
+    <div className="px-6 py-5">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3 animate-fade-up">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-base font-semibold">岗位管理</h1>
+          <span className="text-[11px] tabular-nums text-muted">
+            共 {jobsQuery.data?.items.length || 0} 个岗位
+          </span>
         </div>
         <Button
+          size="sm"
           onClick={() => {
             setError("");
             setOpen(true);
           }}
         >
-          <PlusIcon className="h-4 w-4" /> 发布岗位
+          <PlusIcon className="h-3.5 w-3.5" /> 发布岗位
         </Button>
       </header>
 
       {jobsQuery.isLoading && (
-        <div className="mt-6 space-y-3">
+        <div className="mt-4 space-y-2">
           {Array.from({ length: 4 }).map((_, index) => (
-            <Skeleton key={index} className="h-24 w-full" />
+            <Skeleton key={index} className="h-12 w-full" />
           ))}
         </div>
       )}
 
       {jobsQuery.data && jobsQuery.data.items.length === 0 && (
-        <div className="mt-8">
+        <div className="mt-6">
           <EmptyState
             title="还没有发布岗位"
             description="手动发布一个，或者直接对招聘助手说「帮我招一个 Python 后端」。"
@@ -122,57 +127,85 @@ export function EmployerJobsPage() {
         </div>
       )}
 
-      <div className="mt-6 space-y-3 stagger">
-        {jobsQuery.data?.items.map((job) => {
-          const meta = STATUS_META[job.status] || STATUS_META.open;
-          return (
-            <Card key={job.id} className="p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-[15px] font-semibold">{job.title}</h3>
-                    <Badge tone={meta.tone}>{meta.label}</Badge>
-                    <span className="text-xs text-muted">
-                      收到 <span className="font-semibold text-primary">{job.applicant_count}</span> 份投递
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted">
-                    {job.location} · {job.experience_min}-{job.experience_max} 年 · {job.salary_min}-
-                    {job.salary_max}K
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {job.required_skills.slice(0, 6).map((skill) => (
-                      <span key={skill} className="chip">
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+      {jobs.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-1 border-b border-line pb-3 text-xs">
+          <span>
+            <span className="mr-1.5 text-muted">在招岗位</span>
+            <span className="font-semibold tabular-nums">{openCount}</span>
+          </span>
+          <span>
+            <span className="mr-1.5 text-muted">已关闭</span>
+            <span className="font-semibold tabular-nums">{jobs.length - openCount}</span>
+          </span>
+          <span>
+            <span className="mr-1.5 text-muted">累计投递</span>
+            <span className="font-semibold tabular-nums">{totalApplicants}</span>
+          </span>
+        </div>
+      )}
 
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      toggleMutation.mutate({
-                        id: job.id,
-                        status: job.status === "open" ? "closed" : "open",
-                      })
-                    }
-                  >
-                    {job.status === "open" ? "关闭岗位" : "重新开放"}
-                  </Button>
-                  <Link to={`/employer/board?jobId=${job.id}`}>
-                    <Button size="sm">
-                      候选人看板 <ArrowRightIcon className="h-3.5 w-3.5" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+      {jobsQuery.data && jobsQuery.data.items.length > 0 && (
+        <div className="mt-4 overflow-x-auto border border-line bg-surface">
+          <table className="recruiter-table min-w-[680px]">
+            <thead>
+              <tr>
+                <th className="w-[80px]">编号</th>
+                <th>岗位</th>
+                <th className="w-[70px]">城市</th>
+                <th className="w-[100px]">薪资</th>
+                <th className="w-[70px] text-right">投递</th>
+                <th className="w-[80px]">状态</th>
+                <th className="w-[140px] text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobsQuery.data.items.map((job) => {
+                const meta = STATUS_META[job.status] || STATUS_META.open;
+                return (
+                  <tr key={job.id}>
+                    <td className="text-[11px] tabular-nums text-muted">
+                      JOB-{String(job.id).padStart(3, "0")}
+                    </td>
+                    <td>
+                      <p className="font-medium">{job.title}</p>
+                      <p className="mt-0.5 text-[11px] text-muted">
+                        {job.required_skills.slice(0, 4).join(" · ")}
+                      </p>
+                    </td>
+                    <td className="text-xs text-muted">{job.location}</td>
+                    <td className="text-xs tabular-nums">
+                      {job.salary_min}-{job.salary_max}K
+                    </td>
+                    <td className="text-right text-xs tabular-nums">{job.applicant_count}</td>
+                    <td>
+                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                    </td>
+                    <td className="whitespace-nowrap text-right">
+                      <button
+                        onClick={() =>
+                          toggleMutation.mutate({
+                            id: job.id,
+                            status: job.status === "open" ? "closed" : "open",
+                          })
+                        }
+                        className="text-xs text-muted transition-colors hover:text-ink"
+                      >
+                        {job.status === "open" ? "关闭" : "重新开放"}
+                      </button>
+                      <Link
+                        to={`/employer/board?jobId=${job.id}`}
+                        className="ml-3 text-xs font-medium text-primary hover:underline"
+                      >
+                        候选人 <ArrowRightIcon className="inline h-3 w-3" />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <Modal
         open={open}
@@ -238,7 +271,7 @@ export function EmployerJobsPage() {
             </Field>
           </div>
           {error && (
-            <p className="md:col-span-2 rounded-xl bg-[#FDECEC] px-3.5 py-2.5 text-xs text-danger">
+            <p className="md:col-span-2 rounded-xl border border-danger bg-danger-soft px-3.5 py-2.5 text-xs text-danger">
               {error}
             </p>
           )}

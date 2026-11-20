@@ -3,12 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { Candidate, Job } from "../lib/types";
-import { Button, Card, EmptyState, Modal, ProgressBar, ScoreRing, Skeleton, cn } from "../components/ui";
+import { Button, EmptyState, Modal, ProgressBar, ScoreRing, Skeleton, cn } from "../components/ui";
 import { DuelModal } from "../components/DuelModal";
 import { InterviewReportModal } from "../components/InterviewReportModal";
 
 const COLUMNS: Array<{ key: string; label: string; accent: string }> = [
-  { key: "submitted", label: "已投递", accent: "bg-slate-400" },
+  { key: "submitted", label: "已投递", accent: "bg-muted" },
   { key: "screening", label: "筛选中", accent: "bg-primary" },
   { key: "interview", label: "面试中", accent: "bg-warning" },
   { key: "offer", label: "已录用", accent: "bg-success" },
@@ -40,10 +40,9 @@ function CandidateCard({
       }}
       onClick={onOpen}
       className={cn(
-        "cursor-grab rounded-xl border border-line bg-white p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing",
+        "cursor-grab rounded-lg border border-line bg-surface p-3 transition-colors hover:border-primary active:cursor-grabbing",
         dragging && "drag-ghost",
       )}
-      style={{ transitionTimingFunction: "var(--ease-out)" }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -54,12 +53,12 @@ function CandidateCard({
         </div>
         <span
           className={cn(
-            "shrink-0 rounded-lg px-2 py-0.5 text-xs font-semibold tabular-nums",
+            "shrink-0 px-1.5 py-0.5 text-xs font-semibold tabular-nums",
             candidate.match_score >= 80
-              ? "bg-[#EAF8F0] text-success"
+              ? "bg-success-soft text-success"
               : candidate.match_score >= 60
-                ? "bg-[#EEF3FF] text-primary"
-                : "bg-[#FDF3E7] text-warning",
+                ? "bg-primary-soft text-ink"
+                : "bg-warning-soft text-warning",
           )}
         >
           {Math.round(candidate.match_score)}
@@ -67,7 +66,7 @@ function CandidateCard({
       </div>
       <div className="mt-2 flex flex-wrap gap-1">
         {(candidate.structured.skills || []).slice(0, 3).map((skill) => (
-          <span key={skill} className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
+          <span key={skill} className="rounded-md bg-neutral-soft px-1.5 py-0.5 text-[10px] text-muted">
             {skill}
           </span>
         ))}
@@ -163,37 +162,30 @@ export function EmployerBoardPage() {
   }, [candidatesQuery.data]);
 
   return (
-    <div className="flex h-full flex-col px-4 py-6 md:px-8">
-      <header className="flex flex-wrap items-end justify-between gap-3 animate-fade-up">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Candidate Board</p>
-          <h1 className="mt-1.5 text-[26px] font-semibold tracking-tight">候选人看板</h1>
-          <p className="mt-1 text-sm text-muted">按匹配分排序，拖拽卡片即可推进流程状态。</p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <select
-            className="input w-[260px]"
-            value={jobId || ""}
-            onChange={(event) => setSearchParams({ jobId: event.target.value })}
-          >
-            {(jobsQuery.data?.items || []).map((job) => (
-              <option key={job.id} value={job.id}>
-                {job.title}（{job.applicant_count} 份投递）
-              </option>
-            ))}
-          </select>
-        </div>
+    <div className="flex h-full flex-col px-6 py-4">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3 animate-fade-up">
+        <h1 className="text-base font-semibold">候选人看板</h1>
+        <select
+          className="input h-9 w-[260px] py-1.5 text-xs"
+          value={jobId || ""}
+          onChange={(event) => setSearchParams({ jobId: event.target.value })}
+        >
+          {(jobsQuery.data?.items || []).map((job) => (
+            <option key={job.id} value={job.id}>
+              {job.title}（{job.applicant_count} 份投递）
+            </option>
+          ))}
+        </select>
       </header>
 
       {currentJob && (
-        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-white px-4 py-3 text-xs text-muted animate-fade-in">
+        <div className="mt-3 flex flex-wrap items-center gap-3 px-1 text-xs text-muted animate-fade-in">
           <span className="font-medium text-ink">{currentJob.title}</span>
           <span>
             {currentJob.location} · {currentJob.experience_min}-{currentJob.experience_max} 年 ·{" "}
             {currentJob.salary_min}-{currentJob.salary_max}K
           </span>
-          <span className="ml-auto">
+          <span className="ml-auto tabular-nums">
             共 {candidatesQuery.data?.items.length || 0} 位候选人
           </span>
         </div>
@@ -221,15 +213,14 @@ export function EmployerBoardPage() {
               onDragLeave={() => setDropTarget((prev) => (prev === column.key ? null : prev))}
               onDrop={(event) => handleDrop(column.key, event)}
               className={cn(
-                "flex min-h-[240px] flex-col rounded-2xl border border-line bg-white/60 p-2.5 transition-colors",
+                "flex min-h-[240px] flex-col rounded-xl border border-line bg-surface p-2.5 transition-colors",
                 dropTarget === column.key && "drop-active",
               )}
-              style={{ transitionDuration: "var(--dur-base)" }}
             >
               <div className="mb-2 flex items-center gap-2 px-1">
                 <span className={cn("h-1.5 w-1.5 rounded-full", column.accent)} />
-                <p className="text-xs font-semibold text-slate-600">{column.label}</p>
-                <span className="ml-auto text-[10px] text-slate-400">{grouped[column.key]?.length || 0}</span>
+                <p className="text-xs font-semibold text-ink">{column.label}</p>
+                <span className="ml-auto text-[10px] tabular-nums text-muted">{grouped[column.key]?.length || 0}</span>
               </div>
               <div className="space-y-2">
                 {(grouped[column.key] || []).map((candidate) => (
@@ -242,7 +233,7 @@ export function EmployerBoardPage() {
                   />
                 ))}
                 {!(grouped[column.key] || []).length && (
-                  <div className="rounded-xl border border-dashed border-line/80 py-8 text-center text-[10px] text-slate-400">
+                  <div className="rounded-lg border border-dashed border-line py-8 text-center text-[10px] text-muted">
                     拖到这里
                   </div>
                 )}
@@ -318,8 +309,8 @@ export function EmployerBoardPage() {
               </div>
             </div>
 
-            <Card className="p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">规则分明细</p>
+            <div className="border-t border-line pt-4">
+              <p className="text-xs font-semibold text-ink">规则分明细</p>
               <div className="mt-3 space-y-3">
                 {[
                   ["必需技能", selected.breakdown.skills_required.score, 40],
@@ -330,7 +321,7 @@ export function EmployerBoardPage() {
                 ].map(([label, score, max]) => (
                   <div key={String(label)}>
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-600">{label}</span>
+                      <span className="text-ink">{label}</span>
                       <span className="tabular-nums text-muted">
                         {score} / {max}
                       </span>
@@ -341,40 +332,40 @@ export function EmployerBoardPage() {
                   </div>
                 ))}
               </div>
-            </Card>
+            </div>
 
             {selected.match_explanation ? (
-              <div className="rounded-xl bg-[#F6F8FE] p-4">
-                <p className="text-xs font-semibold text-primary">AI 评估</p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-600">
+              <div className="border-l-2 border-primary bg-neutral-soft p-4">
+                <p className="text-xs font-semibold text-ink">AI 评估</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
                   {selected.match_explanation.summary}
                 </p>
                 {selected.match_explanation.gaps.length > 0 && (
-                  <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
                     差距：{selected.match_explanation.gaps.join("；")}
                   </p>
                 )}
               </div>
             ) : (
-              <div className="rounded-xl bg-[#F6F8FE] p-4 text-xs leading-relaxed text-slate-500">
+              <div className="border-l-2 border-line bg-neutral-soft p-4 text-xs leading-relaxed text-muted">
                 还没有 AI 深度评估。可以在「AI 招聘助手」里说：「详细评一下这位候选人」，助手会生成完整评估。
               </div>
             )}
 
             {selected.structured.work_experience?.length > 0 && (
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">工作经历</p>
+                <p className="text-xs font-semibold text-ink">工作经历</p>
                 <div className="mt-2 space-y-2">
                   {selected.structured.work_experience.map((work, index) => (
-                    <div key={index} className="rounded-xl border border-line p-3">
+                    <div key={index} className="border-l-2 border-line pl-3">
                       <div className="flex justify-between text-xs">
                         <span className="font-medium">{work.company}</span>
-                        <span className="text-slate-400">{work.period}</span>
+                        <span className="text-muted">{work.period}</span>
                       </div>
                       <p className="mt-0.5 text-[11px] text-muted">{work.role}</p>
                       <ul className="mt-1 space-y-0.5">
                         {work.highlights.map((item) => (
-                          <li key={item} className="text-[11px] leading-relaxed text-slate-500">
+                          <li key={item} className="text-[11px] leading-relaxed text-muted">
                             · {item}
                           </li>
                         ))}

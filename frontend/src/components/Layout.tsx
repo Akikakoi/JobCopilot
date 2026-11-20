@@ -20,23 +20,31 @@ interface NavItem {
   to: string;
   label: string;
   icon: typeof BriefcaseIcon;
-  hint: string;
 }
 
 const SEEKER_NAV: NavItem[] = [
-  { to: "/seeker/jobs", label: "找岗位", icon: BriefcaseIcon, hint: "搜索 · 匹配" },
-  { to: "/seeker/chat", label: "AI 求职助手", icon: ChatIcon, hint: "对话找工作" },
-  { to: "/seeker/interview", label: "面试训练", icon: MicIcon, hint: "模拟 · 报告" },
-  { to: "/seeker/subscriptions", label: "岗位订阅", icon: BellIcon, hint: "新岗位提醒" },
-  { to: "/seeker/resume", label: "我的简历", icon: FileIcon, hint: "解析 · 结构化" },
-  { to: "/seeker/applications", label: "我的投递", icon: SendIcon, hint: "进度跟踪" },
+  { to: "/seeker/jobs", label: "找岗位", icon: BriefcaseIcon },
+  { to: "/seeker/chat", label: "AI 求职助手", icon: ChatIcon },
+  { to: "/seeker/interview", label: "面试训练", icon: MicIcon },
+  { to: "/seeker/subscriptions", label: "岗位订阅", icon: BellIcon },
+  { to: "/seeker/resume", label: "我的简历", icon: FileIcon },
+  { to: "/seeker/applications", label: "我的投递", icon: SendIcon },
 ];
 
 const EMPLOYER_NAV: NavItem[] = [
-  { to: "/employer/jobs", label: "岗位管理", icon: BriefcaseIcon, hint: "发布 · 维护" },
-  { to: "/employer/board", label: "候选人看板", icon: BoardIcon, hint: "筛选 · 推进" },
-  { to: "/employer/chat", label: "AI 招聘助手", icon: ChatIcon, hint: "对话招人" },
+  { to: "/employer/jobs", label: "岗位管理", icon: BriefcaseIcon },
+  { to: "/employer/board", label: "候选人看板", icon: BoardIcon },
+  { to: "/employer/chat", label: "AI 招聘助手", icon: ChatIcon },
 ];
+
+function todayLabel() {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  }).format(new Date());
+}
 
 export function Layout() {
   const { user, logout } = useAuth();
@@ -56,30 +64,101 @@ export function Layout() {
 
   if (!user) return null;
 
-  const nav = user.role === "employer" ? EMPLOYER_NAV : SEEKER_NAV;
+  const signOut = () => {
+    logout();
+    navigate("/login");
+  };
 
+  /* ---------------- 求职者：顶部导航 + 居中内容 ---------------- */
+  if (user.role === "seeker") {
+    return (
+      <div className="theme-seeker flex h-full flex-col bg-bg">
+        <header className="shrink-0 border-b border-line bg-surface">
+          <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4 md:px-8">
+            <NavLink to="/seeker/jobs" className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-white">
+                JC
+              </div>
+              <span className="text-[15px] font-semibold">JobCopilot</span>
+            </NavLink>
+
+            <nav className="hidden h-14 items-center gap-0.5 md:flex">
+              {SEEKER_NAV.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex h-14 items-center border-b-2 px-3 text-[13px] transition-colors",
+                      isActive
+                        ? "border-primary font-semibold text-primary"
+                        : "border-transparent text-muted hover:text-ink",
+                    )
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+
+            <div className="ml-auto flex items-center gap-2">
+              <NotificationBell align="right" />
+              <span className="hidden h-4 w-px bg-line md:block" />
+              <span className="hidden text-xs text-muted md:inline">{user.display_name}</span>
+              <button onClick={signOut} className="p-1.5 text-muted transition-colors hover:text-danger" title="退出登录">
+                <LogoutIcon className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <nav className="flex items-center gap-4 overflow-x-auto border-t border-line px-4 py-2 md:hidden">
+            {SEEKER_NAV.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  cn(
+                    "whitespace-nowrap text-xs",
+                    isActive ? "font-semibold text-primary" : "text-muted",
+                  )
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+        </header>
+
+        <main className="app-scroll min-h-0 flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
+
+  /* ---------------- 招聘方：左侧栏 + 全宽工作区 ---------------- */
   return (
-    <div className="flex h-full bg-bg">
-      <aside className="relative z-30 hidden w-[248px] shrink-0 flex-col border-r border-line bg-white/80 px-4 py-6 backdrop-blur md:flex">
-        <div className="flex items-center gap-2.5 px-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent text-sm font-bold text-white shadow-sm">
+    <div className="theme-employer flex h-full bg-bg">
+      <aside className="hidden w-[204px] shrink-0 flex-col border-r border-line bg-surface px-3 py-5 md:flex">
+        <div className="flex items-center gap-2.5 px-1">
+          <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-primary text-[11px] font-bold text-white">
             JC
           </div>
           <div>
-            <p className="text-[15px] font-semibold leading-tight tracking-tight">JobCopilot</p>
-            <p className="text-[11px] text-muted">
-              {user.role === "employer" ? "招聘方工作台" : "求职者空间"}
-            </p>
+            <p className="text-[13px] font-semibold leading-tight">JobCopilot</p>
+            <p className="mt-0.5 text-[10px] text-muted">招聘工作台</p>
           </div>
-          {user.role === "seeker" && (
-            <div className="ml-auto">
-              <NotificationBell align="left" />
-            </div>
-          )}
         </div>
 
-        <nav className="mt-8 space-y-1">
-          {nav.map((item) => {
+        <div className="mt-5 border-y border-line px-1 py-3">
+          <p className="text-[10px] text-muted">当前公司</p>
+          <p className="mt-1 truncate text-[13px] font-semibold">
+            {user.company_name || "未填写公司"}
+          </p>
+        </div>
+
+        <nav className="mt-3 space-y-0.5">
+          {EMPLOYER_NAV.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -87,31 +166,19 @@ export function Layout() {
                 to={item.to}
                 className={({ isActive }) =>
                   cn(
-                    "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200",
+                    "flex items-center gap-2.5 border-l-2 py-2.5 pl-2.5 pr-2 text-[13px] transition-colors",
                     isActive
-                      ? "bg-[#EEF3FF] font-semibold text-primary"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-ink",
+                      ? "border-primary bg-neutral-soft font-semibold text-ink"
+                      : "border-transparent text-muted hover:bg-neutral-soft hover:text-ink",
                   )
                 }
-                style={{ transitionTimingFunction: "var(--ease-out)" }}
               >
                 {({ isActive }) => (
                   <>
                     <Icon
-                      className={cn(
-                        "h-[18px] w-[18px] shrink-0 transition-transform duration-200",
-                        isActive ? "text-primary" : "text-slate-400 group-hover:text-slate-600",
-                      )}
+                      className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted")}
                     />
-                    <span className="flex-1">{item.label}</span>
-                    <span
-                      className={cn(
-                        "text-[10px]",
-                        isActive ? "text-primary/60" : "text-slate-300",
-                      )}
-                    >
-                      {item.hint}
-                    </span>
+                    <span>{item.label}</span>
                   </>
                 )}
               </NavLink>
@@ -119,71 +186,61 @@ export function Layout() {
           })}
         </nav>
 
-        <div className="mt-auto">
-          <div className="rounded-2xl border border-line bg-slate-50/80 p-3">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-semibold text-primary shadow-sm">
-                {user.display_name.slice(0, 1)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-ink">{user.display_name}</p>
-                <p className="truncate text-[11px] text-muted">
-                  {user.role === "employer" ? user.company_name || "招聘方" : "求职者"}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  logout();
-                  navigate("/login");
-                }}
-                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-white hover:text-danger"
-                title="退出登录"
-              >
-                <LogoutIcon className="h-4 w-4" />
-              </button>
+        <div className="mt-auto border-t border-line pt-3">
+          <div className="flex items-center gap-2.5 px-1">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-neutral-soft text-[11px] font-semibold">
+              {user.display_name.slice(0, 1)}
             </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium">{user.display_name}</p>
+              <p className="truncate text-[10px] text-muted">{user.company_name || "招聘方"}</p>
+            </div>
+            <button
+              onClick={signOut}
+              className="p-1 text-muted transition-colors hover:text-danger"
+              title="退出登录"
+            >
+              <LogoutIcon className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="relative z-30 flex items-center justify-between gap-3 border-b border-line bg-white/70 px-4 py-3 backdrop-blur md:hidden">
+        <header className="hidden items-center justify-between border-b border-line bg-surface px-6 py-2.5 md:flex">
+          <p className="text-[13px] font-semibold">{user.company_name || "招聘工作台"}</p>
+          <p className="text-xs tabular-nums text-muted">{todayLabel()}</p>
+        </header>
+
+        <header className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 md:hidden">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent text-xs font-bold text-white">
+            <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-primary text-[11px] font-bold text-white">
               JC
             </div>
             <span className="text-sm font-semibold">JobCopilot</span>
           </div>
-          <div className="flex items-center gap-1 overflow-x-auto">
-            {nav.map((item) => (
+          <div className="flex items-center gap-3 overflow-x-auto">
+            {EMPLOYER_NAV.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
                   cn(
-                    "whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs transition-colors",
-                    isActive ? "bg-[#EEF3FF] font-semibold text-primary" : "text-slate-500",
+                    "whitespace-nowrap text-xs",
+                    isActive ? "font-semibold text-ink" : "text-muted",
                   )
                 }
               >
                 {item.label}
               </NavLink>
             ))}
-            {user.role === "seeker" && <NotificationBell align="right" />}
-            <button
-              onClick={() => {
-                logout();
-                navigate("/login");
-              }}
-              className="rounded-lg p-1.5 text-slate-400"
-              title="退出登录"
-            >
+            <button onClick={signOut} className="p-1 text-muted" title="退出登录">
               <LogoutIcon className="h-4 w-4" />
             </button>
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <main className="app-scroll min-h-0 flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>
