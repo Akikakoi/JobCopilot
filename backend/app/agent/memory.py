@@ -1,11 +1,11 @@
 import json
 
-import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.llm.client import embed_one
 from app.models import AgentMemory
+from app.utils import cosine_similarity
 
 
 async def save_memory(db: Session, user_id: int, content: str) -> dict:
@@ -15,7 +15,7 @@ async def save_memory(db: Session, user_id: int, content: str) -> dict:
     vector = await embed_one(content)
     memories = list(db.scalars(select(AgentMemory).where(AgentMemory.user_id == user_id)))
     for memory in memories:
-        if memory.embedding and _cosine(vector, memory.embedding) > 0.95:
+        if memory.embedding and cosine_similarity(vector, memory.embedding) > 0.95:
             memory.content = content
             memory.embedding = vector
             db.commit()
@@ -39,18 +39,12 @@ async def search_memory(db: Session, user_id: int, query: str, top_k: int = 5) -
         return [{"content": m.content, "similarity": None} for m in memories[:top_k]]
     vector = await embed_one(query)
     scored = [
-        (m, _cosine(vector, m.embedding)) for m in memories if m.embedding
+        (m, cosine_similarity(vector, m.embedding)) for m in memories if m.embedding
     ]
     scored.sort(key=lambda pair: pair[1], reverse=True)
     return [
         {"content": m.content, "similarity": round(score, 3)} for m, score in scored[:top_k]
     ]
-
-
-def _cosine(a: list[float], b: list[float]) -> float:
-    va, vb = np.asarray(a, dtype=np.float32), np.asarray(b, dtype=np.float32)
-    denom = float(np.linalg.norm(va) * np.linalg.norm(vb))
-    return 0.0 if denom == 0 else float(np.dot(va, vb) / denom)
 
 
 def dump_result(data) -> str:
