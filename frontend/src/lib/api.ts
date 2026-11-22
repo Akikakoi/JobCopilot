@@ -3,21 +3,41 @@ import type { ChatEvent, DuelEvent } from "./types";
 const TOKEN_KEY = "jc_token";
 const USER_KEY = "jc_user";
 
+// 登录态按标签页隔离：优先读 sessionStorage，新标签页没有会话时从 localStorage 继承最近一次登录。
+// 这样同一浏览器可以一个窗口登录 B 端、另一个窗口登录 C 端，刷新后各自保持自己的账号。
+function readStored(key: string): string | null {
+  const session = sessionStorage.getItem(key);
+  if (session !== null) return session;
+  const local = localStorage.getItem(key);
+  if (local !== null) {
+    sessionStorage.setItem(key, local);
+    return local;
+  }
+  return null;
+}
+
+function writeStored(key: string, value: string) {
+  sessionStorage.setItem(key, value);
+  localStorage.setItem(key, value);
+}
+
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return readStored(TOKEN_KEY);
 }
 
 export function setToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
+  writeStored(TOKEN_KEY, token);
 }
 
 export function clearAuth() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  for (const storage of [sessionStorage, localStorage]) {
+    storage.removeItem(TOKEN_KEY);
+    storage.removeItem(USER_KEY);
+  }
 }
 
 export function getStoredUser<T>(): T | null {
-  const raw = localStorage.getItem(USER_KEY);
+  const raw = readStored(USER_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as T;
@@ -27,7 +47,7 @@ export function getStoredUser<T>(): T | null {
 }
 
 export function setStoredUser(user: unknown) {
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  writeStored(USER_KEY, JSON.stringify(user));
 }
 
 export class ApiError extends Error {
@@ -92,6 +112,33 @@ export const api = {
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
   upload: <T>(path: string, form: FormData) => request<T>(path, { method: "POST", body: form }),
 };
+
+export async function fetchBlob(path: string): Promise<Blob> {
+  const token = getToken();
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  } catch {
+    throw new ApiError("网络异常，请确认后端已启动", -1, 0);
+  }
+  if (res.status === 401) {
+    clearAuth();
+    window.dispatchEvent(new Event("jc:unauthorized"));
+  }
+  if (!res.ok) {
+    let message = `请求失败（${res.status}）`;
+    try {
+      const payload = await res.json();
+      message = payload.message || message;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(message, res.status, res.status);
+  }
+  return res.blob();
+}
 
 export async function streamChat(
   sessionId: number,

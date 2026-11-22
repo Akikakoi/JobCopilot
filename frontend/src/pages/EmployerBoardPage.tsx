@@ -1,19 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, fetchBlob } from "../lib/api";
 import type { Candidate, Job } from "../lib/types";
-import { Button, EmptyState, Modal, ProgressBar, ScoreRing, Skeleton, cn } from "../components/ui";
+import { DownloadIcon } from "../components/icons";
+import { Badge, Button, EmptyState, Modal, ProgressBar, ScoreRing, Select, Skeleton, STATUS_META, Textarea, cn } from "../components/ui";
 import { DuelModal } from "../components/DuelModal";
 import { InterviewReportModal } from "../components/InterviewReportModal";
+import { EmployerPipeline } from "../components/PipelinePanel";
 
 const COLUMNS: Array<{ key: string; label: string; accent: string }> = [
   { key: "submitted", label: "已投递", accent: "bg-muted" },
   { key: "screening", label: "筛选中", accent: "bg-primary" },
   { key: "interview", label: "面试中", accent: "bg-warning" },
-  { key: "offer", label: "已录用", accent: "bg-success" },
+  { key: "offer", label: "Offer 阶段", accent: "bg-success" },
+  { key: "onboarding", label: "待入职", accent: "bg-primary" },
+  { key: "hired", label: "已入职", accent: "bg-success" },
+  { key: "abandoned", label: "放弃入职", accent: "bg-muted" },
   { key: "rejected", label: "未通过", accent: "bg-danger" },
 ];
+
+// 入职阶段由双端入职动作驱动，看板不允许拖拽改状态
+const DROPPABLE_STATUSES = new Set(["submitted", "screening", "interview", "offer", "rejected"]);
 
 interface JobWithCount extends Job {
   applicant_count: number;
@@ -24,16 +32,31 @@ function CandidateCard({
   onOpen,
   onDragStart,
   dragging,
+  showJob,
 }: {
   candidate: Candidate;
   onOpen: () => void;
   onDragStart: () => void;
   dragging: boolean;
+  showJob: boolean;
 }) {
+  const latestInvite = candidate.interview_invites?.[candidate.interview_invites.length - 1];
+  const pendingOffer = candidate.offer?.status === "pending";
+  const acceptedOffer = candidate.offer?.status === "accepted";
+  const pendingInvite = latestInvite?.status === "pending";
+  const confirmedInvite = latestInvite?.status === "confirmed";
+  const awaitingOnboarding =
+    candidate.status === "onboarding" && !candidate.onboarding.confirmed;
+  const readyOnboarding =
+    candidate.status === "onboarding" && candidate.onboarding.confirmed;
+  const hired = candidate.status === "hired";
+  const abandoned = candidate.status === "abandoned";
+
   return (
     <div
-      draggable
+      draggable={DROPPABLE_STATUSES.has(candidate.status)}
       onDragStart={(event) => {
+        if (!DROPPABLE_STATUSES.has(candidate.status)) return;
         event.dataTransfer.setData("text/plain", String(candidate.application_id));
         event.dataTransfer.effectAllowed = "move";
         onDragStart();
@@ -50,6 +73,9 @@ function CandidateCard({
           <p className="mt-0.5 text-[11px] text-muted">
             {candidate.structured.title} · {candidate.structured.years_of_experience} 年
           </p>
+          {showJob && (
+            <p className="mt-0.5 truncate text-[10px] text-primary">{candidate.job_title}</p>
+          )}
         </div>
         <span
           className={cn(
@@ -71,6 +97,25 @@ function CandidateCard({
           </span>
         ))}
       </div>
+      {(pendingOffer ||
+        acceptedOffer ||
+        pendingInvite ||
+        confirmedInvite ||
+        awaitingOnboarding ||
+        readyOnboarding ||
+        hired ||
+        abandoned) && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px] font-medium">
+          {pendingOffer && <span className="text-warning">Offer 待确认</span>}
+          {acceptedOffer && <span className="text-success">Offer 已接受</span>}
+          {pendingInvite && <span className="text-warning">面试待确认</span>}
+          {confirmedInvite && <span className="text-primary">面试已确认</span>}
+          {awaitingOnboarding && <span className="text-warning">待确认入职</span>}
+          {readyOnboarding && <span className="text-primary">待入职</span>}
+          {hired && <span className="text-success">已入职</span>}
+          {abandoned && <span className="text-muted">放弃入职</span>}
+        </div>
+      )}
       {candidate.breakdown.skills_required.missing && candidate.breakdown.skills_required.missing.length > 0 && (
         <p className="mt-1.5 truncate text-[10px] text-warning">
           缺 {candidate.breakdown.skills_required.missing.slice(0, 2).join("、")}
@@ -88,24 +133,34 @@ export function EmployerBoardPage() {
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [duelCandidate, setDuelCandidate] = useState<Candidate | null>(null);
   const [interviewCandidate, setInterviewCandidate] = useState<Candidate | null>(null);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
+  const [noteDraft, setNoteDraft] = useState("");
 
   const jobsQuery = useQuery({
     queryKey: ["my-jobs"],
     queryFn: () => api.get<{ items: JobWithCount[] }>("/jobs/mine"),
   });
 
-  const jobId = Number(searchParams.get("jobId") || jobsQuery.data?.items[0]?.id || 0);
+  const jobParam = searchParams.get("jobId");
+  const allJobs = jobParam === "all";
+  const jobId = allJobs ? 0 : Number(jobParam || jobsQuery.data?.items[0]?.id || 0);
+  const candidateScope: number | "all" = allJobs ? "all" : jobId;
 
   useEffect(() => {
-    if (!searchParams.get("jobId") && jobsQuery.data?.items[0]) {
+    if (!jobParam && jobsQuery.data?.items[0]) {
       setSearchParams({ jobId: String(jobsQuery.data.items[0].id) }, { replace: true });
     }
-  }, [jobsQuery.data, searchParams, setSearchParams]);
+  }, [jobsQuery.data, jobParam, setSearchParams]);
 
   const candidatesQuery = useQuery({
-    queryKey: ["candidates", jobId],
-    queryFn: () => api.get<{ items: Candidate[] }>(`/match/job/${jobId}/candidates`),
-    enabled: Boolean(jobId),
+    queryKey: ["candidates", candidateScope],
+    queryFn: () =>
+      api.get<{ items: Candidate[] }>(
+        `/match/candidates${jobId ? `?job_id=${jobId}` : ""}`,
+      ),
+    enabled: allJobs || Boolean(jobId),
+    refetchInterval: 30_000,
   });
 
   const currentJob = useMemo(
@@ -113,17 +168,35 @@ export function EmployerBoardPage() {
     [jobsQuery.data, jobId],
   );
 
+  // 面试邀约 / Offer 变更后，用最新候选人数据刷新详情弹窗
+  useEffect(() => {
+    if (!selected) return;
+    const fresh = candidatesQuery.data?.items.find(
+      (item) => item.application_id === selected.application_id,
+    );
+    if (fresh && fresh !== selected) setSelected(fresh);
+  }, [candidatesQuery.data, selected]);
+
   const patchMutation = useMutation({
-    mutationFn: ({ applicationId, status }: { applicationId: number; status: string }) =>
-      api.patch(`/applications/${applicationId}/status`, { status }),
-    onMutate: async ({ applicationId, status }) => {
-      await queryClient.cancelQueries({ queryKey: ["candidates", jobId] });
-      const previous = queryClient.getQueryData<{ items: Candidate[] }>(["candidates", jobId]);
-      queryClient.setQueryData<{ items: Candidate[] }>(["candidates", jobId], (old) =>
+    mutationFn: ({
+      applicationId,
+      status,
+      note,
+    }: {
+      applicationId: number;
+      status: string;
+      note?: string;
+    }) => api.patch(`/applications/${applicationId}/status`, { status, note }),
+    onMutate: async ({ applicationId, status, note }) => {
+      await queryClient.cancelQueries({ queryKey: ["candidates", candidateScope] });
+      const previous = queryClient.getQueryData<{ items: Candidate[] }>(["candidates", candidateScope]);
+      queryClient.setQueryData<{ items: Candidate[] }>(["candidates", candidateScope], (old) =>
         old
           ? {
               items: old.items.map((item) =>
-                item.application_id === applicationId ? { ...item, status } : item,
+                item.application_id === applicationId
+                  ? { ...item, status, ...(note ? { status_note: note } : {}) }
+                  : item,
               ),
             }
           : old,
@@ -132,14 +205,33 @@ export function EmployerBoardPage() {
     },
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(["candidates", jobId], context.previous);
+        queryClient.setQueryData(["candidates", candidateScope], context.previous);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["candidates", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["candidates", candidateScope] });
       queryClient.invalidateQueries({ queryKey: ["my-jobs"] });
     },
   });
+
+  const downloadCandidateResume = async () => {
+    if (!selected || !selected.has_resume_file) return;
+    setDownloadBusy(true);
+    setDownloadError("");
+    try {
+      const blob = await fetchBlob(`/applications/${selected.application_id}/resume-file`);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = selected.resume_file_name || "resume";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "原简历下载失败");
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
 
   const handleDrop = (status: string, event: React.DragEvent) => {
     event.preventDefault();
@@ -161,30 +253,43 @@ export function EmployerBoardPage() {
     return map;
   }, [candidatesQuery.data]);
 
+  const jobs = jobsQuery.data?.items || [];
+  const totalApplicants = jobs.reduce((sum, job) => sum + job.applicant_count, 0);
+
   return (
     <div className="flex h-full flex-col px-6 py-4">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3 animate-fade-up">
         <h1 className="text-base font-semibold">候选人看板</h1>
-        <select
-          className="input h-9 w-[260px] py-1.5 text-xs"
-          value={jobId || ""}
-          onChange={(event) => setSearchParams({ jobId: event.target.value })}
-        >
-          {(jobsQuery.data?.items || []).map((job) => (
-            <option key={job.id} value={job.id}>
-              {job.title}（{job.applicant_count} 份投递）
-            </option>
-          ))}
-        </select>
+        <Select
+          className="w-[280px]"
+          ariaLabel="选择岗位"
+          value={allJobs ? "all" : String(jobId || "")}
+          onChange={(value) => setSearchParams({ jobId: value })}
+          options={[
+            { label: `全部岗位（${totalApplicants} 份投递）`, value: "all" },
+            ...jobs.map((job) => ({
+              label: `${job.title}（${job.applicant_count} 份投递）`,
+              value: String(job.id),
+            })),
+          ]}
+        />
       </header>
 
-      {currentJob && (
+      {(currentJob || allJobs) && (
         <div className="mt-3 flex flex-wrap items-center gap-3 px-1 text-xs text-muted animate-fade-in">
-          <span className="font-medium text-ink">{currentJob.title}</span>
-          <span>
-            {currentJob.location} · {currentJob.experience_min}-{currentJob.experience_max} 年 ·{" "}
-            {currentJob.salary_min}-{currentJob.salary_max}K
+          <span className="font-medium text-ink">
+            {allJobs ? "全部岗位" : currentJob?.title}
           </span>
+          {allJobs ? (
+            <span>共 {jobs.length} 个岗位</span>
+          ) : (
+            currentJob && (
+              <span>
+                {currentJob.location} · {currentJob.experience_min}-{currentJob.experience_max} 年 ·{" "}
+                {currentJob.salary_min}-{currentJob.salary_max}K
+              </span>
+            )
+          )}
           <span className="ml-auto tabular-nums">
             共 {candidatesQuery.data?.items.length || 0} 位候选人
           </span>
@@ -192,9 +297,9 @@ export function EmployerBoardPage() {
       )}
 
       {jobsQuery.isLoading || candidatesQuery.isLoading ? (
-        <div className="mt-5 grid flex-1 grid-cols-2 gap-3 lg:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <Skeleton key={index} className="h-64 w-full" />
+        <div className="mt-5 flex flex-1 gap-3 overflow-x-auto pb-4">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <Skeleton key={index} className="h-64 w-[200px] shrink-0" />
           ))}
         </div>
       ) : !jobsQuery.data?.items.length ? (
@@ -202,18 +307,22 @@ export function EmployerBoardPage() {
           <EmptyState title="还没有岗位" description="先去岗位管理发布一个岗位，再回来看候选人。" />
         </div>
       ) : (
-        <div className="mt-5 grid flex-1 grid-cols-2 gap-3 overflow-y-auto pb-4 lg:grid-cols-5">
+        <div className="mt-5 flex flex-1 gap-3 overflow-x-auto pb-4">
           {COLUMNS.map((column) => (
             <section
               key={column.key}
               onDragOver={(event) => {
+                if (!DROPPABLE_STATUSES.has(column.key)) return;
                 event.preventDefault();
                 setDropTarget(column.key);
               }}
               onDragLeave={() => setDropTarget((prev) => (prev === column.key ? null : prev))}
-              onDrop={(event) => handleDrop(column.key, event)}
+              onDrop={(event) => {
+                if (!DROPPABLE_STATUSES.has(column.key)) return;
+                handleDrop(column.key, event);
+              }}
               className={cn(
-                "flex min-h-[240px] flex-col rounded-xl border border-line bg-surface p-2.5 transition-colors",
+                "flex min-h-[240px] w-[200px] shrink-0 flex-col rounded-xl border border-line bg-surface p-2.5 transition-colors",
                 dropTarget === column.key && "drop-active",
               )}
             >
@@ -227,14 +336,19 @@ export function EmployerBoardPage() {
                   <CandidateCard
                     key={candidate.application_id}
                     candidate={candidate}
+                    showJob={allJobs}
                     dragging={draggingId === candidate.application_id}
                     onDragStart={() => setDraggingId(candidate.application_id)}
-                    onOpen={() => setSelected(candidate)}
+                    onOpen={() => {
+                      setDownloadError("");
+                      setNoteDraft(candidate.status_note || "");
+                      setSelected(candidate);
+                    }}
                   />
                 ))}
                 {!(grouped[column.key] || []).length && (
                   <div className="rounded-lg border border-dashed border-line py-8 text-center text-[10px] text-muted">
-                    拖到这里
+                    {DROPPABLE_STATUSES.has(column.key) ? "拖到这里" : "暂无候选人"}
                   </div>
                 )}
               </div>
@@ -247,27 +361,35 @@ export function EmployerBoardPage() {
         open={Boolean(selected)}
         title={selected ? `候选人 · ${selected.candidate_name}` : ""}
         width="max-w-2xl"
-        onClose={() => setSelected(null)}
+        onClose={() => {
+          setSelected(null);
+          setDownloadError("");
+          setNoteDraft("");
+        }}
         footer={
           selected ? (
             <div className="flex w-full flex-wrap items-center justify-between gap-2">
-              <select
-                className="input w-[160px]"
-                value={selected.status}
-                onChange={(event) => {
-                  patchMutation.mutate({
-                    applicationId: selected.application_id,
-                    status: event.target.value,
-                  });
-                  setSelected({ ...selected, status: event.target.value });
-                }}
-              >
-                {COLUMNS.map((column) => (
-                  <option key={column.key} value={column.key}>
-                    {column.label}
-                  </option>
-                ))}
-              </select>
+              {DROPPABLE_STATUSES.has(selected.status) ? (
+                <Select
+                  className="w-[160px]"
+                  ariaLabel="候选人状态"
+                  value={selected.status}
+                  onChange={(status) => {
+                    patchMutation.mutate({
+                      applicationId: selected.application_id,
+                      status,
+                    });
+                    setSelected({ ...selected, status });
+                  }}
+                  options={COLUMNS.filter((column) =>
+                    DROPPABLE_STATUSES.has(column.key),
+                  ).map((column) => ({ label: column.label, value: column.key }))}
+                />
+              ) : (
+                <Badge tone={STATUS_META[selected.status]?.tone || "default"}>
+                  {selected.status_label}
+                </Badge>
+              )}
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
@@ -308,6 +430,70 @@ export function EmployerBoardPage() {
                 </div>
               </div>
             </div>
+
+            <div className="border-t border-line pt-4">
+              <p className="text-xs font-semibold text-ink">招聘备注</p>
+              <p className="mt-0.5 text-[11px] text-muted">会展示在求职者的「我的投递」进度中。</p>
+              <div className="mt-2">
+                <Textarea
+                  value={noteDraft}
+                  onChange={(event) => setNoteDraft(event.target.value)}
+                  placeholder="如：一面技术基础扎实，二面重点考察项目深度"
+                />
+              </div>
+              <div className="mt-2 flex justify-end">
+                <Button
+                  size="sm"
+                  variant="soft"
+                  loading={patchMutation.isPending}
+                  disabled={noteDraft.trim() === (selected.status_note || "")}
+                  onClick={() =>
+                    patchMutation.mutate({
+                      applicationId: selected.application_id,
+                      status: selected.status,
+                      note: noteDraft.trim(),
+                    })
+                  }
+                >
+                  保存备注
+                </Button>
+              </div>
+            </div>
+
+            {selected.has_resume_file && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-ink">原始简历</p>
+                  <p className="mt-0.5 truncate text-[11px] text-muted">
+                    {selected.resume_file_name || "候选人已上传简历文件"}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="soft"
+                  loading={downloadBusy}
+                  onClick={() => void downloadCandidateResume()}
+                >
+                  <DownloadIcon className="h-3.5 w-3.5" /> 下载原简历
+                </Button>
+              </div>
+            )}
+            {downloadError && (
+              <p className="rounded-lg border border-danger bg-danger-soft px-3 py-2 text-[11px] text-danger">
+                {downloadError}
+              </p>
+            )}
+
+            {selected.cover_letter && (
+              <div className="border-t border-line pt-4">
+                <p className="text-xs font-semibold text-ink">求职信</p>
+                <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted">
+                  {selected.cover_letter}
+                </p>
+              </div>
+            )}
+
+            <EmployerPipeline candidate={selected} jobId={allJobs ? "all" : jobId} />
 
             <div className="border-t border-line pt-4">
               <p className="text-xs font-semibold text-ink">规则分明细</p>
@@ -381,8 +567,8 @@ export function EmployerBoardPage() {
 
       <DuelModal
         open={Boolean(duelCandidate)}
-        jobId={jobId}
-        jobTitle={currentJob?.title || ""}
+        jobId={duelCandidate?.job_id || jobId}
+        jobTitle={duelCandidate?.job_title || currentJob?.title || ""}
         applicationId={duelCandidate?.application_id || 0}
         candidateName={duelCandidate?.candidate_name || ""}
         onClose={() => setDuelCandidate(null)}

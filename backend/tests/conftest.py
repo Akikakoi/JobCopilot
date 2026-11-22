@@ -5,6 +5,7 @@ from pathlib import Path
 # 必须在导入 app 之前设置，确保测试使用独立数据库与假密钥（不触网）
 _TEST_DIR = Path(tempfile.mkdtemp(prefix="jobcopilot_test_"))
 os.environ["DATABASE_URL"] = f"sqlite:///{(_TEST_DIR / 'test.db').as_posix()}"
+os.environ["UPLOAD_DIR"] = str(_TEST_DIR / "uploads")
 os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["CHAT_API_KEY"] = "test-key"
 os.environ["EMBEDDING_API_KEY"] = "test-key"

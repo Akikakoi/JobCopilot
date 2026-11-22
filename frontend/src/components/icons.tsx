@@ -44,12 +44,11 @@ export function SendIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-export function UsersIcon(props: SVGProps<SVGSVGElement>) {
+export function MailIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>
-      <path d="M16 20v-1.5a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V20" />
-      <circle cx="9" cy="7.5" r="3.2" />
-      <path d="M17 11a3 3 0 1 0 0-6M22 20v-1.4a3.6 3.6 0 0 0-2.8-3.5" />
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
     </svg>
   );
 }
@@ -169,6 +168,34 @@ export function ArrowLeftIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>
       <path d="M19 12H5M11 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+export function SettingsIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1" />
+      <circle cx="15" cy="7" r="2" />
+      <circle cx="9" cy="12" r="2" />
+      <circle cx="17" cy="17" r="2" />
+    </svg>
+  );
+}
+
+export function BuildingIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M14 9h4a2 2 0 0 1 2 2v10M2 21h20" />
+      <path d="M8 7h2M8 11h2M8 15h2" />
+    </svg>
+  );
+}
+
+export function DownloadIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 3v12M7 10l5 5 5-5M4 21h16" />
     </svg>
   );
 }

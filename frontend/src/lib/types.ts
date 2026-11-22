@@ -20,27 +20,30 @@ export interface Job {
   experience_min: number;
   experience_max: number;
   location: string;
+  district: string;
+  category: string;
+  job_type: string;
   salary_min: number;
   salary_max: number;
   status: string;
   created_at?: string;
 }
 
-export interface EducationItem {
+interface EducationItem {
   school: string;
   degree: string;
   major: string;
   period: string;
 }
 
-export interface WorkItem {
+interface WorkItem {
   company: string;
   role: string;
   period: string;
   highlights: string[];
 }
 
-export interface ResumeStructured {
+interface ResumeStructured {
   name: string;
   title: string;
   skills: string[];
@@ -55,6 +58,13 @@ export interface ResumeStructured {
   };
 }
 
+interface ResumeFileInfo {
+  name: string;
+  content_type: string;
+  size: number;
+  previewable: boolean;
+}
+
 export interface Resume {
   id: number;
   user_id: number;
@@ -63,16 +73,17 @@ export interface Resume {
   source: string;
   has_embedding: boolean;
   updated_at: string;
+  file?: ResumeFileInfo | null;
 }
 
-export interface SkillBreakdown {
+interface SkillBreakdown {
   score: number;
   max: number;
   matched: string[];
   missing?: string[];
 }
 
-export interface Breakdown {
+interface Breakdown {
   skills_required: SkillBreakdown;
   skills_preferred: SkillBreakdown;
   experience: { score: number; max: number; resume_years: number; required_years: number };
@@ -88,7 +99,7 @@ export interface MatchItem extends Job {
   breakdown: Breakdown;
 }
 
-export interface MatchExplanation {
+interface MatchExplanation {
   summary: string;
   reasons: string[];
   gaps: string[];
@@ -104,6 +115,60 @@ export interface MatchDetail {
   application_id: number | null;
 }
 
+interface ApplicationEvent {
+  id: number;
+  application_id: number;
+  from_status: string;
+  from_status_label: string;
+  to_status: string;
+  to_status_label: string;
+  note: string;
+  created_at: string;
+}
+
+export interface InterviewInvite {
+  id: number;
+  application_id: number;
+  job_id: number;
+  round: number;
+  scheduled_at: string;
+  duration_minutes: number;
+  mode: "onsite" | "video" | "phone";
+  mode_label: string;
+  location: string;
+  note: string;
+  status: "pending" | "confirmed" | "declined" | "cancelled" | "completed";
+  status_label: string;
+  candidate_note: string;
+  created_at: string;
+}
+
+export interface Offer {
+  id: number;
+  application_id: number;
+  job_id: number;
+  salary_min: number;
+  salary_max: number;
+  start_date: string;
+  expires_at: string | null;
+  note: string;
+  status: "pending" | "accepted" | "declined" | "expired";
+  status_label: string;
+  response_note: string;
+  responded_at: string | null;
+  created_at: string;
+}
+
+export interface Onboarding {
+  date: string;
+  confirmed: boolean;
+  confirmed_at: string | null;
+  result: "" | "hired" | "abandoned";
+  result_label: string;
+  result_at: string | null;
+  note: string;
+}
+
 export interface Application {
   id: number;
   job_id: number;
@@ -116,6 +181,10 @@ export interface Application {
   match_score: number | null;
   match_explanation: MatchExplanation | null;
   cover_letter: string;
+  offer: Offer | null;
+  onboarding: Onboarding;
+  interview_invites: InterviewInvite[];
+  events: ApplicationEvent[];
   created_at: string;
   updated_at: string;
 }
@@ -123,13 +192,35 @@ export interface Application {
 export interface Candidate {
   application_id: number;
   user_id: number;
+  job_id: number;
+  job_title: string;
   candidate_name: string;
   structured: ResumeStructured;
   status: string;
+  status_label: string;
+  status_note: string;
+  onboarding: Onboarding;
+  cover_letter: string;
+  has_resume_file: boolean;
+  resume_file_name: string;
   match_score: number;
   similarity: number;
   breakdown: Breakdown;
   match_explanation: MatchExplanation | null;
+  offer: Offer | null;
+  interview_invites: InterviewInvite[];
+}
+
+export interface CompanyInfo {
+  id: number;
+  name: string;
+  industry: string;
+  description: string;
+}
+
+export interface CompanyDetail extends CompanyInfo {
+  open_job_count: number;
+  jobs: Job[];
 }
 
 export interface AgentSession {
@@ -172,7 +263,7 @@ export interface ToolTrace {
   status: "running" | "done";
 }
 
-export type DuelSpeaker = "seeker" | "employer";
+type DuelSpeaker = "seeker" | "employer";
 
 export interface DuelEvent {
   type:
@@ -206,7 +297,7 @@ export interface DuelTurn {
   streaming: boolean;
 }
 
-export interface InterviewQuestion {
+interface InterviewQuestion {
   id: string;
   category: string;
   question: string;
@@ -214,14 +305,14 @@ export interface InterviewQuestion {
   reference_points: string[];
 }
 
-export interface InterviewAnswer {
+interface InterviewAnswer {
   question_id: string;
   answer: string;
   score?: number;
   rationale?: string;
 }
 
-export interface InterviewReport {
+interface InterviewReport {
   overall_score: number;
   dimensions: Record<string, number>;
   strengths: string[];
@@ -259,7 +350,7 @@ export interface InterviewSummary {
   created_at: string;
 }
 
-export interface SubscriptionFilters {
+interface SubscriptionFilters {
   keywords: string;
   location: string;
   salary_min: number | null;
@@ -276,12 +367,42 @@ export interface Subscription {
   created_at: string;
 }
 
+export interface ConversationSummary {
+  id: number;
+  application_id: number;
+  job_id: number;
+  job_title: string;
+  company_name: string;
+  candidate_name: string;
+  other_name: string;
+  unread: number;
+  last_message: {
+    content: string;
+    created_at: string;
+    sender_user_id: number;
+    mine: boolean;
+  } | null;
+}
+
+export interface ChatMessage {
+  id: number;
+  conversation_id: number;
+  content: string;
+  sender_user_id: number;
+  mine: boolean;
+  created_at: string;
+}
+
 export interface AppNotification {
   id: number;
   type: string;
   title: string;
   payload: {
     job_id?: number;
+    application_id?: number;
+    status?: string;
+    status_label?: string;
+    note?: string;
     title?: string;
     company_name?: string;
     location?: string;
@@ -304,7 +425,7 @@ export interface ResumeVersion {
   created_at: string;
 }
 
-export interface ResumeOptimizeRewrite {
+interface ResumeOptimizeRewrite {
   target: string;
   original: string;
   suggestion: string;

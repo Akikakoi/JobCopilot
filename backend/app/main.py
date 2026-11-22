@@ -55,18 +55,28 @@ from app.routers import (  # noqa: E402
     agent,
     applications,
     auth,
+    companies,
+    interview_invites,
     interviews,
     jobs,
     match,
+    messages,
     notifications,
+    offers,
+    onboarding,
     resumes,
     subscriptions,
 )
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(companies.router, prefix="/api")
 app.include_router(resumes.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 app.include_router(applications.router, prefix="/api")
+app.include_router(offers.router, prefix="/api")
+app.include_router(onboarding.router, prefix="/api")
+app.include_router(interview_invites.router, prefix="/api")
+app.include_router(messages.router, prefix="/api")
 app.include_router(match.router, prefix="/api")
 app.include_router(interviews.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")

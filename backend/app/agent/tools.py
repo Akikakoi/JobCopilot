@@ -3,6 +3,7 @@
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -16,9 +17,11 @@ from app.models import Application, Job, Resume, User
 from app.services import (
     application_service,
     candidate_service,
+    interview_invite_service,
     interview_service,
     job_service,
-    resume_service,
+    onboarding_service,
+    offer_service,
     subscription_service,
 )
 
@@ -72,7 +75,11 @@ async def _search_jobs(
     location: str | None = None,
     salary_min: float | None = None,
 ) -> Any:
-    jobs = job_service.list_jobs(db, keywords=keywords, location=location, salary_min=salary_min)[:10]
+    jobs = (
+        await job_service.search_jobs(
+            db, keywords=keywords, location=location, salary_min=salary_min
+        )
+    )[:10]
     return {
         "total": len(jobs),
         "jobs": [
@@ -308,9 +315,12 @@ async def _create_subscription(
         "skills": [item.strip() for item in (skills or []) if item and item.strip()],
         "match_score_min": match_score_min,
     }
-    subscription = subscription_service.create_subscription(
-        db, user, name or "我的岗位订阅", filters, True
-    )
+    try:
+        subscription = subscription_service.create_subscription(
+            db, user, name or "我的岗位订阅", filters, True
+        )
+    except subscription_service.SubscriptionError as exc:
+        return {"error": str(exc)}
     return {
         "subscription_id": subscription.id,
         "name": subscription.name,
@@ -427,6 +437,19 @@ async def _list_candidates(db: Session, user: User, job_id: int) -> Any:
                 "years": (item["structured"].get("years_of_experience") or 0),
                 "skills": (item["structured"].get("skills") or [])[:12],
                 "missing_skills": item["breakdown"]["skills_required"]["missing"],
+                "offer_status": (item.get("offer") or {}).get("status"),
+                "onboarding": item.get("onboarding"),
+                "next_step": _onboarding_next_step(item["status"], bool(item.get("onboarding", {}).get("confirmed")), employer=True),
+                "latest_interview": (
+                    {
+                        "invite_id": item["interview_invites"][-1]["id"],
+                        "round": item["interview_invites"][-1]["round"],
+                        "status": item["interview_invites"][-1]["status"],
+                        "scheduled_at": item["interview_invites"][-1]["scheduled_at"],
+                    }
+                    if item.get("interview_invites")
+                    else None
+                ),
             }
             for item in items
         ],
@@ -519,13 +542,301 @@ async def _get_candidate_interview_report(
     }
 
 
+def _parse_tool_datetime(value: str) -> datetime:
+    text = (value or "").strip()
+    if not text:
+        raise ValueError("时间不能为空，请使用 ISO 格式，如 2030-01-01T10:00")
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("时间格式不正确，请使用 ISO 格式，如 2030-01-01T10:00") from exc
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+def _offer_summary(offer: dict | None) -> dict | None:
+    if not offer:
+        return None
+    return {
+        "offer_id": offer["id"],
+        "salary_min": offer["salary_min"],
+        "salary_max": offer["salary_max"],
+        "start_date": offer["start_date"],
+        "expires_at": offer["expires_at"],
+        "status": offer["status"],
+        "status_label": offer["status_label"],
+        "note": offer["note"],
+        "response_note": offer["response_note"],
+    }
+
+
+def _onboarding_next_step(status: str, confirmed: bool, employer: bool = False) -> str:
+    if status == "onboarding":
+        if employer:
+            return "记录实际到岗结果" if confirmed else "等待候选人确认入职"
+        return "等待招聘方记录到岗结果" if confirmed else "确认入职安排"
+    if status == "hired":
+        return "已完成入职"
+    if status == "abandoned":
+        return "已放弃入职"
+    return ""
+
+
+def _invite_summary(invite: dict) -> dict:
+    return {
+        "invite_id": invite["id"],
+        "round": invite["round"],
+        "scheduled_at": invite["scheduled_at"],
+        "duration_minutes": invite["duration_minutes"],
+        "mode": invite["mode"],
+        "mode_label": invite["mode_label"],
+        "location": invite["location"],
+        "note": invite["note"],
+        "status": invite["status"],
+        "status_label": invite["status_label"],
+        "candidate_note": invite["candidate_note"],
+    }
+
+
+async def _list_my_pipeline(db: Session, user: User) -> Any:
+    applications = application_service.list_my_applications(db, user)
+    app_ids = [item.id for item in applications]
+    offers = offer_service.group_offers(db, app_ids)
+    invites = interview_invite_service.group_invites(db, app_ids)
+    items = []
+    for application in applications:
+        job = application.job
+        items.append(
+            {
+                "application_id": application.id,
+                "job_id": application.job_id,
+                "job_title": job.title if job else "",
+                "company": job.company.name if job and job.company else "",
+                "status": application.status,
+                "status_label": application_service.STATUS_LABELS.get(
+                    application.status, application.status
+                ),
+                "offer": _offer_summary(offers.get(application.id)),
+                "onboarding": application_service.onboarding_to_dict(application),
+                "next_step": _onboarding_next_step(
+                    application.status,
+                    application.onboarding_confirmed_at is not None,
+                ),
+                "interview_invites": [
+                    _invite_summary(item)
+                    for item in invites.get(application.id, [])
+                ],
+            }
+        )
+    return {"total": len(items), "applications": items}
+
+
+async def _respond_interview_invite(
+    db: Session,
+    user: User,
+    application_id: int,
+    invite_id: int,
+    action: str,
+    note: str = "",
+) -> Any:
+    if action not in ("confirm", "decline"):
+        return {"error": "action 只能是 confirm 或 decline"}
+    try:
+        invite = interview_invite_service.respond_invite(
+            db, user, application_id, invite_id, action, note
+        )
+    except (ValueError, PermissionError) as exc:
+        return {"error": str(exc)}
+    return {
+        **_invite_summary(interview_invite_service.invite_to_dict(invite)),
+        "message": "已确认面试" if action == "confirm" else "已拒绝面试邀约",
+    }
+
+
+async def _respond_offer(
+    db: Session, user: User, application_id: int, action: str, note: str = ""
+) -> Any:
+    if action not in ("accept", "decline"):
+        return {"error": "action 只能是 accept 或 decline"}
+    try:
+        offer = offer_service.respond_offer(db, user, application_id, action, note)
+    except (ValueError, PermissionError) as exc:
+        return {"error": str(exc)}
+    return {
+        **_offer_summary(offer_service.offer_to_dict(offer)),
+        "message": "已接受 Offer" if action == "accept" else "已拒绝 Offer",
+    }
+
+
+async def _confirm_onboarding(
+    db: Session, user: User, application_id: int, note: str = ""
+) -> Any:
+    try:
+        application = onboarding_service.confirm_onboarding(
+            db, user, application_id, note
+        )
+    except (ValueError, PermissionError) as exc:
+        return {"error": str(exc)}
+    return {
+        "application_id": application.id,
+        "status": application.status,
+        "status_label": application_service.STATUS_LABELS.get(
+            application.status, application.status
+        ),
+        "onboarding": application_service.onboarding_to_dict(application),
+        "message": "已确认入职安排",
+    }
+
+
+async def _abandon_onboarding(
+    db: Session, user: User, application_id: int, note: str = ""
+) -> Any:
+    try:
+        application = onboarding_service.abandon_onboarding(
+            db, user, application_id, note
+        )
+    except (ValueError, PermissionError) as exc:
+        return {"error": str(exc)}
+    return {
+        "application_id": application.id,
+        "status": application.status,
+        "status_label": application_service.STATUS_LABELS.get(
+            application.status, application.status
+        ),
+        "onboarding": application_service.onboarding_to_dict(application),
+        "message": "已放弃入职",
+    }
+
+
+async def _record_onboarding_result(
+    db: Session,
+    user: User,
+    application_id: int,
+    result: str,
+    note: str = "",
+    onboarding_date: str = "",
+) -> Any:
+    try:
+        application = onboarding_service.record_onboarding_result(
+            db, user, application_id, result, note, onboarding_date
+        )
+    except (ValueError, PermissionError) as exc:
+        return {"error": str(exc)}
+    return {
+        "application_id": application.id,
+        "status": application.status,
+        "status_label": application_service.STATUS_LABELS.get(
+            application.status, application.status
+        ),
+        "onboarding": application_service.onboarding_to_dict(application),
+        "message": "入职结果已记录",
+    }
+
+
+async def _create_interview_invite(
+    db: Session,
+    user: User,
+    application_id: int,
+    scheduled_at: str,
+    duration_minutes: int = 45,
+    mode: str = "video",
+    location: str = "",
+    note: str = "",
+    round: int | None = None,
+) -> Any:
+    try:
+        scheduled = _parse_tool_datetime(scheduled_at)
+        invite = interview_invite_service.create_invite(
+            db,
+            user,
+            application_id,
+            {
+                "scheduled_at": scheduled,
+                "duration_minutes": duration_minutes,
+                "mode": mode,
+                "location": location,
+                "note": note,
+                "round": round,
+            },
+        )
+    except (ValueError, PermissionError) as exc:
+        return {"error": str(exc)}
+    return {
+        **_invite_summary(interview_invite_service.invite_to_dict(invite)),
+        "message": "面试邀约已发送，候选人会收到站内通知",
+    }
+
+
+async def _cancel_interview_invite(
+    db: Session, user: User, application_id: int, invite_id: int, note: str = ""
+) -> Any:
+    try:
+        invite = interview_invite_service.cancel_invite(
+            db, user, application_id, invite_id, note
+        )
+    except (ValueError, PermissionError) as exc:
+        return {"error": str(exc)}
+    return {
+        **_invite_summary(interview_invite_service.invite_to_dict(invite)),
+        "message": "面试邀约已取消",
+    }
+
+
+async def _complete_interview_invite(
+    db: Session, user: User, application_id: int, invite_id: int, note: str = ""
+) -> Any:
+    try:
+        invite = interview_invite_service.complete_invite(
+            db, user, application_id, invite_id, note
+        )
+    except (ValueError, PermissionError) as exc:
+        return {"error": str(exc)}
+    return {
+        **_invite_summary(interview_invite_service.invite_to_dict(invite)),
+        "message": "面试已标记完成",
+    }
+
+
+async def _create_offer(
+    db: Session,
+    user: User,
+    application_id: int,
+    salary_min: float = 0,
+    salary_max: float = 0,
+    start_date: str = "",
+    expires_at: str | None = None,
+    note: str = "",
+) -> Any:
+    try:
+        expires = _parse_tool_datetime(expires_at) if expires_at else None
+        offer = offer_service.create_offer(
+            db,
+            user,
+            application_id,
+            {
+                "salary_min": salary_min,
+                "salary_max": salary_max,
+                "start_date": start_date,
+                "expires_at": expires,
+                "note": note,
+            },
+        )
+    except (ValueError, PermissionError) as exc:
+        return {"error": str(exc)}
+    return {
+        **_offer_summary(offer_service.offer_to_dict(offer)),
+        "message": "Offer 已发送，候选人会收到站内通知",
+    }
+
+
 # ============================== 注册表 ==============================
 
 SEEKER_TOOLS: list[Tool] = [
     Tool("get_my_resume", "读取当前用户的结构化简历", obj(), _get_my_resume),
     Tool(
         "search_jobs",
-        "按关键词/城市/最低薪资检索在招岗位",
+        "按关键词/城市/最低薪资检索在招岗位（关键词支持语义匹配）",
         obj(
             {
                 "keywords": {"type": "string", "description": "关键词，如 Python 后端"},
@@ -598,7 +909,7 @@ SEEKER_TOOLS: list[Tool] = [
     ),
     Tool(
         "create_subscription",
-        "创建岗位订阅，新发布的匹配岗位会进入站内通知",
+        "创建岗位订阅（至少需提供关键词/城市/最低月薪/技能/最低匹配分中的一个条件），新发布的匹配岗位会进入站内通知",
         obj(
             {
                 "keywords": {"type": "string"},
@@ -616,6 +927,63 @@ SEEKER_TOOLS: list[Tool] = [
         "查看当前用户的未读站内通知（新岗位推荐）",
         obj(),
         _list_unread_notifications,
+    ),
+    Tool(
+        "list_my_pipeline",
+        "查看我的投递及其面试邀约、Offer 状态（含后续操作用的 id）",
+        obj(),
+        _list_my_pipeline,
+    ),
+    Tool(
+        "respond_interview_invite",
+        "确认或拒绝面试邀约；必须由用户明确决定后才能调用",
+        obj(
+            {
+                "application_id": {"type": "integer"},
+                "invite_id": {"type": "integer"},
+                "action": {"type": "string", "enum": ["confirm", "decline"]},
+                "note": {"type": "string", "description": "给招聘方的备注，如时间冲突原因"},
+            },
+            ["application_id", "invite_id", "action"],
+        ),
+        _respond_interview_invite,
+    ),
+    Tool(
+        "respond_offer",
+        "接受或拒绝 Offer；必须由用户明确决定后才能调用，不可代为同意",
+        obj(
+            {
+                "application_id": {"type": "integer"},
+                "action": {"type": "string", "enum": ["accept", "decline"]},
+                "note": {"type": "string"},
+            },
+            ["application_id", "action"],
+        ),
+        _respond_offer,
+    ),
+    Tool(
+        "confirm_onboarding",
+        "确认入职安排（Offer 接受后进入待入职）；必须由用户明确表态后调用",
+        obj(
+            {
+                "application_id": {"type": "integer"},
+                "note": {"type": "string", "description": "给招聘方的备注，如到岗时间说明"},
+            },
+            ["application_id"],
+        ),
+        _confirm_onboarding,
+    ),
+    Tool(
+        "abandon_onboarding",
+        "放弃入职（待入职阶段）；必须由用户明确决定后调用，调用后投递结束",
+        obj(
+            {
+                "application_id": {"type": "integer"},
+                "note": {"type": "string", "description": "放弃原因"},
+            },
+            ["application_id"],
+        ),
+        _abandon_onboarding,
     ),
     Tool(
         "save_memory",
@@ -716,6 +1084,88 @@ EMPLOYER_TOOLS: list[Tool] = [
         "查看候选人已完成的结构化模拟面试报告",
         obj({"application_id": {"type": "integer"}}, ["application_id"]),
         _get_candidate_interview_report,
+    ),
+    Tool(
+        "create_interview_invite",
+        "给候选人发送面试邀约；调用前先与用户确认时间、方式和地点，发送后会推进投递到面试中",
+        obj(
+            {
+                "application_id": {"type": "integer"},
+                "scheduled_at": {
+                    "type": "string",
+                    "description": "面试时间，ISO 格式，如 2030-01-01T10:00",
+                },
+                "duration_minutes": {"type": "integer", "description": "时长，默认 45 分钟"},
+                "mode": {"type": "string", "enum": ["video", "onsite", "phone"]},
+                "location": {"type": "string", "description": "会议链接或现场地址"},
+                "note": {"type": "string", "description": "面试官、准备材料等说明"},
+                "round": {"type": "integer", "description": "轮次，不填自动取下一轮"},
+            },
+            ["application_id", "scheduled_at"],
+        ),
+        _create_interview_invite,
+    ),
+    Tool(
+        "cancel_interview_invite",
+        "取消已发出的面试邀约（需用户确认）",
+        obj(
+            {
+                "application_id": {"type": "integer"},
+                "invite_id": {"type": "integer"},
+                "note": {"type": "string", "description": "取消原因"},
+            },
+            ["application_id", "invite_id"],
+        ),
+        _cancel_interview_invite,
+    ),
+    Tool(
+        "complete_interview_invite",
+        "把已进行的面试标记为完成（面试结束后使用）",
+        obj(
+            {
+                "application_id": {"type": "integer"},
+                "invite_id": {"type": "integer"},
+                "note": {"type": "string", "description": "面试结果或补充说明"},
+            },
+            ["application_id", "invite_id"],
+        ),
+        _complete_interview_invite,
+    ),
+    Tool(
+        "create_offer",
+        "给候选人发送 Offer；调用前必须获得用户对薪资、入职时间与有效期的确认",
+        obj(
+            {
+                "application_id": {"type": "integer"},
+                "salary_min": {"type": "number", "description": "最低月薪，单位 K"},
+                "salary_max": {"type": "number", "description": "最高月薪，单位 K"},
+                "start_date": {"type": "string", "description": "入职日期，如 2030-02-01"},
+                "expires_at": {
+                    "type": "string",
+                    "description": "Offer 有效期，ISO 格式，如 2030-01-10T23:59:59",
+                },
+                "note": {"type": "string"},
+            },
+            ["application_id", "salary_min", "salary_max"],
+        ),
+        _create_offer,
+    ),
+    Tool(
+        "record_onboarding_result",
+        "记录候选人实际到岗结果（已入职 / 放弃入职），需用户确认后调用",
+        obj(
+            {
+                "application_id": {"type": "integer"},
+                "result": {"type": "string", "enum": ["hired", "abandoned"]},
+                "note": {"type": "string", "description": "到岗情况说明"},
+                "onboarding_date": {
+                    "type": "string",
+                    "description": "实际入职日期，如 2030-02-03；不填沿用 Offer 入职日期",
+                },
+            },
+            ["application_id", "result"],
+        ),
+        _record_onboarding_result,
     ),
     Tool(
         "save_memory",

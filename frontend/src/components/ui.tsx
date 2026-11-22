@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { CloseIcon } from "./icons";
+import { createPortal } from "react-dom";
+import { CheckIcon, ChevronIcon, CloseIcon } from "./icons";
 import {
   useEffect,
   useRef,
@@ -70,6 +71,181 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
 
 export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea className={cn("input min-h-[96px] resize-y", className)} {...rest} />;
+}
+
+type SelectOption = { label: string; value: string };
+
+export function Select({
+  value,
+  onChange,
+  options,
+  placeholder,
+  className,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  className?: string;
+  ariaLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const [pos, setPos] = useState<{
+    left: number;
+    width: number;
+    top?: number;
+    bottom?: number;
+    maxHeight: number;
+  } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const selectedIndex = options.findIndex((option) => option.value === value);
+  const current = selectedIndex >= 0 ? options[selectedIndex] : undefined;
+
+  const openMenu = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom - 12;
+    const spaceAbove = rect.top - 12;
+    const flipUp = spaceBelow < 220 && spaceAbove > spaceBelow;
+    setPos({
+      left: rect.left,
+      width: rect.width,
+      top: flipUp ? undefined : rect.bottom + 6,
+      bottom: flipUp ? window.innerHeight - rect.top + 6 : undefined,
+      maxHeight: Math.max(160, Math.min(320, flipUp ? spaceAbove : spaceBelow)),
+    });
+    setActive(selectedIndex);
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !listRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    };
+    const close = () => setOpen(false);
+    // 面板内部的滚动（滚轮/拖动滚动条）不应关闭面板
+    const onScroll = (event: Event) => {
+      if (listRef.current?.contains(event.target as Node)) return;
+      close();
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || active < 0) return;
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-index="${active}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [open, active]);
+
+  const commit = (index: number) => {
+    const option = options[index];
+    if (!option) return;
+    onChange(option.value);
+    setOpen(false);
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!open) {
+        openMenu();
+        return;
+      }
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      setActive((prev) => {
+        if (prev < 0) return delta === 1 ? 0 : options.length - 1;
+        return (prev + delta + options.length) % options.length;
+      });
+      return;
+    }
+    if (open && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      commit(active);
+      return;
+    }
+    if (event.key === "Escape") setOpen(false);
+  };
+
+  return (
+    <div className={className}>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        onKeyDown={onKeyDown}
+        className={cn("input flex items-center justify-between gap-2 text-left", open && "border-primary")}
+      >
+        <span className={cn("truncate", !current && "text-muted")}>
+          {current?.label ?? placeholder ?? ""}
+        </span>
+        <ChevronIcon className={cn("h-3.5 w-3.5 shrink-0", open ? "text-primary" : "text-muted")} />
+      </button>
+
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={listRef}
+            role="listbox"
+            style={{
+              left: pos.left,
+              width: pos.width,
+              top: pos.top,
+              bottom: pos.bottom,
+              maxHeight: pos.maxHeight,
+            }}
+            className="fixed z-50 overflow-y-auto rounded-xl border border-line bg-surface p-1 shadow-md animate-fade-in"
+          >
+            {options.map((option, index) => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  key={option.value || "__all"}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  data-index={index}
+                  onClick={() => commit(index)}
+                  onMouseEnter={() => setActive(index)}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-1.5 text-left text-sm transition-colors",
+                    isSelected
+                      ? "bg-primary-soft font-medium text-primary"
+                      : index === active
+                        ? "bg-neutral-soft text-ink"
+                        : "text-ink",
+                  )}
+                >
+                  <span className="truncate">{option.label}</span>
+                  {isSelected && <CheckIcon className="h-3.5 w-3.5 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
 }
 
 export function Field({
@@ -302,7 +478,10 @@ export const STATUS_META: Record<string, { label: string; tone: "default" | "pri
   submitted: { label: "已投递", tone: "default" },
   screening: { label: "筛选中", tone: "primary" },
   interview: { label: "面试中", tone: "warning" },
-  offer: { label: "已录用", tone: "success" },
+  offer: { label: "Offer 阶段", tone: "warning" },
+  onboarding: { label: "待入职", tone: "primary" },
+  hired: { label: "已入职", tone: "success" },
+  abandoned: { label: "放弃入职", tone: "default" },
   rejected: { label: "未通过", tone: "danger" },
   open: { label: "在招", tone: "success" },
   closed: { label: "已关闭", tone: "default" },

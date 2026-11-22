@@ -2,21 +2,26 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import type { Application } from "../lib/types";
+import { formatDateTime } from "../lib/format";
 import { ArrowRightIcon } from "../components/icons";
 import { Badge, Button, Card, EmptyState, Skeleton, STATUS_META, cn } from "../components/ui";
+import { SeekerPipeline } from "../components/PipelinePanel";
 
-const FLOW = ["submitted", "screening", "interview", "offer"];
+const FLOW = ["submitted", "screening", "interview", "offer", "onboarding"];
 
 function Stepper({ status }: { status: string }) {
-  if (status === "rejected") {
+  if (status === "rejected" || status === "abandoned") {
     return (
       <div className="flex items-center gap-2 text-xs text-danger">
         <span className="h-2 w-2 rounded-full bg-danger" />
-        流程终止 · 未通过
+        流程终止 · {status === "abandoned" ? "放弃入职" : "未通过"}
       </div>
     );
   }
-  const activeIndex = Math.max(0, FLOW.indexOf(status));
+  const activeIndex = Math.max(
+    0,
+    status === "hired" ? FLOW.length - 1 : FLOW.indexOf(status),
+  );
   return (
     <div className="flex items-center">
       {FLOW.map((step, index) => {
@@ -56,6 +61,7 @@ export function ApplicationsPage() {
   const appsQuery = useQuery({
     queryKey: ["applications", "mine"],
     queryFn: () => api.get<{ items: Application[] }>("/applications/mine"),
+    refetchInterval: 30_000,
   });
 
   return (
@@ -88,7 +94,16 @@ export function ApplicationsPage() {
 
       <div className="mt-6 space-y-3 stagger">
         {appsQuery.data?.items.map((app) => {
-          const meta = STATUS_META[app.status] || STATUS_META.submitted;
+          const meta =
+            app.status === "offer" && app.offer
+              ? app.offer.status === "accepted"
+                ? { label: "Offer 已接受", tone: "success" as const }
+                : app.offer.status === "expired"
+                  ? { label: "Offer 已过期", tone: "danger" as const }
+                  : { label: "Offer 阶段", tone: "warning" as const }
+              : STATUS_META[app.status] || STATUS_META.submitted;
+          const latestEventNote = app.events[app.events.length - 1]?.note || "";
+          const showStatusNote = Boolean(app.status_note) && app.status_note !== latestEventNote;
           return (
             <Card key={app.id} className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -98,7 +113,7 @@ export function ApplicationsPage() {
                     <Badge tone={meta.tone}>{meta.label}</Badge>
                   </div>
                   <p className="mt-1 text-xs text-muted">
-                    {app.company_name} · 投递于 {new Date(app.created_at).toLocaleString("zh-CN")}
+                    {app.company_name} · 投递于 {formatDateTime(app.created_at)}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -123,13 +138,42 @@ export function ApplicationsPage() {
 
               <div className="mt-5">
                 <Stepper status={app.status} />
+                {app.status === "hired" && (
+                  <p className="mt-2 text-xs text-success">
+                    已完成入职{app.onboarding.date ? ` · ${app.onboarding.date}` : ""}
+                  </p>
+                )}
               </div>
 
-              {app.status_note && (
+              {app.events.length > 0 && (
+                <div className="mt-3 rounded-lg bg-neutral-soft px-3 py-2.5">
+                  <p className="text-[11px] font-semibold text-muted">状态记录</p>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {[...app.events].reverse().map((event) => (
+                      <li
+                        key={event.id}
+                        className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]"
+                      >
+                        <span className="tabular-nums text-muted">
+                          {formatDateTime(event.created_at)}
+                        </span>
+                        <span className="text-ink">
+                          {event.from_status_label} → {event.to_status_label}
+                        </span>
+                        {event.note && <span className="text-muted">备注：{event.note}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {showStatusNote && (
                 <p className="mt-3 rounded-lg bg-neutral-soft px-3 py-2 text-xs text-muted">
                   招聘方备注：{app.status_note}
                 </p>
               )}
+
+              <SeekerPipeline app={app} />
 
               {app.match_explanation?.summary && (
                 <p className="mt-3 border-t border-line pt-3 text-xs leading-relaxed text-muted">
