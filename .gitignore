@@ -5,6 +5,10 @@ __pycache__/
 .pytest_cache/
 *.db
 *.db-journal
+*.db.bak
+
+# --- 用户上传文件（简历原件，运行时生成） ---
+backend/uploads/
 
 # --- 环境变量（含 API 密钥，禁止入库） ---
 .env
@@ -24,3 +28,7 @@ Thumbs.db
 
 # --- 演示产物 ---
 .screenshots/
+preview/
+
+# --- 测试产物（可由 seed_data 下的 Markdown 重新生成，不入库） ---
+seed_data/resumes_pdf/

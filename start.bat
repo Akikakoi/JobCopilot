@@ -60,7 +60,7 @@ echo.
 echo 启动完成：
 echo   前端  http://127.0.0.1:5180
 echo   接口  http://127.0.0.1:8000/docs
-echo   账号  zhangsan / demo1234（求职者）  hr-li / demo1234（招聘方）
+echo   账号  zhangsan / 123456（求职者）  xinglankeji / 123456（招聘方）
 echo.
 echo 关闭本窗口不会停止服务，请手动关闭服务窗口
 pause

@@ -40,4 +40,4 @@ Write-Host ""
 Write-Host "已拉起两个窗口：" -ForegroundColor Green
 Write-Host "  前端  http://127.0.0.1:5180"
 Write-Host "  接口  http://127.0.0.1:8000/docs"
-Write-Host "  账号  zhangsan / demo1234（求职者）、hr-li / demo1234（招聘方）"
+Write-Host "  账号  zhangsan / 123456（求职者）、xinglankeji / 123456（招聘方，星澜科技）"
