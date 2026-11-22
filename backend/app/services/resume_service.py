@@ -1,10 +1,13 @@
 import json
+from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.llm.client import chat_completion, embed_one, message_text
-from app.models import Job, Resume, ResumeVersion
+from app.models import Job, Resume, ResumeFile, ResumeVersion
 from app.schemas.resume import ResumeOptimizeResult, ResumeStructured
 from app.services.job_service import job_to_dict
 
@@ -134,6 +137,7 @@ async def save_resume(db: Session, user_id: int, raw_text: str, source: str) -> 
 
 
 def resume_to_dict(resume: Resume) -> dict:
+    upload = resume.upload_file
     return {
         "id": resume.id,
         "user_id": resume.user_id,
@@ -142,7 +146,62 @@ def resume_to_dict(resume: Resume) -> dict:
         "source": resume.source,
         "has_embedding": bool(resume.embedding),
         "updated_at": resume.updated_at,
+        "file": (
+            {
+                "name": upload.file_name,
+                "content_type": upload.content_type,
+                "size": upload.size,
+                "previewable": upload.content_type == "application/pdf",
+            }
+            if upload
+            else None
+        ),
     }
+
+
+# =========================== 原始文件（预览 / 下载） ===========================
+
+CONTENT_TYPES = {
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".txt": "text/plain; charset=utf-8",
+    ".md": "text/markdown; charset=utf-8",
+}
+
+
+def save_resume_file(db: Session, resume: Resume, filename: str, data: bytes) -> ResumeFile:
+    """把上传的原始文件落盘，并记录到 resume_files；重复上传覆盖旧文件。"""
+    suffix = Path(filename).suffix.lower()
+    upload_root = Path(settings.upload_dir)
+    folder = upload_root / str(resume.user_id)
+    folder.mkdir(parents=True, exist_ok=True)
+
+    record = resume.upload_file
+    if record and record.stored_path:
+        (upload_root / record.stored_path).unlink(missing_ok=True)
+
+    stored = folder / f"{uuid4().hex}{suffix}"
+    stored.write_bytes(data)
+
+    if record is None:
+        record = ResumeFile(resume_id=resume.id)
+        db.add(record)
+    record.file_name = Path(filename).name or f"resume{suffix}"
+    record.stored_path = stored.relative_to(upload_root).as_posix()
+    record.content_type = CONTENT_TYPES.get(suffix, "application/octet-stream")
+    record.size = len(data)
+    db.commit()
+    db.refresh(record)
+    db.expire(resume, ["upload_file"])  # 让 resume_to_dict 读到最新文件
+    return record
+
+
+def get_resume_file(db: Session, user_id: int) -> ResumeFile | None:
+    return db.scalar(
+        select(ResumeFile)
+        .join(Resume, ResumeFile.resume_id == Resume.id)
+        .where(Resume.user_id == user_id)
+    )
 
 
 # =========================== 版本快照 / 回滚 ===========================

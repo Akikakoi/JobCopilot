@@ -1,8 +1,12 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import get_db
 from app.deps import require_role
 from app.models import Resume, User
@@ -46,7 +50,22 @@ async def upload_resume(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except resume_service.ResumeExtractionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    resume_service.save_resume_file(db, resume, file.filename or "", data)
     return ok(resume_service.resume_to_dict(resume), message="简历解析完成")
+
+
+@router.get("/mine/file")
+def get_my_resume_file(
+    user: User = Depends(require_role("seeker")),
+    db: Session = Depends(get_db),
+):
+    record = resume_service.get_resume_file(db, user.id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="还没有上传过简历文件")
+    path = Path(settings.upload_dir) / record.stored_path
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="简历原文件已丢失，请重新上传")
+    return FileResponse(path, media_type=record.content_type, filename=record.file_name)
 
 
 @router.post("/paste")

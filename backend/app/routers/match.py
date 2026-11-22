@@ -72,6 +72,24 @@ async def job_match_detail(
     )
 
 
+@router.get("/candidates")
+async def all_candidates(
+    job_id: int | None = Query(default=None, ge=1),
+    user: User = Depends(require_role("employer")),
+    db: Session = Depends(get_db),
+):
+    """本公司候选人列表：不传 job_id 时为全部岗位，按匹配分统一排序。"""
+    try:
+        items = (
+            await candidate_service.rank_candidates(db, user, job_id)
+            if job_id
+            else await candidate_service.rank_all_candidates(db, user)
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return ok({"items": items, "total": len(items)})
+
+
 @router.get("/job/{job_id}/candidates")
 async def job_candidates(
     job_id: int,

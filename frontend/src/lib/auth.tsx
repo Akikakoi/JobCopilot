@@ -22,6 +22,7 @@ interface AuthState {
     display_name: string;
     company_name?: string;
   }) => Promise<User>;
+  refreshUser: () => Promise<User>;
   logout: () => void;
 }
 
@@ -84,14 +85,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const refreshUser = useCallback(async () => {
+    const me = await api.get<User>("/auth/me");
+    setUser(me);
+    setStoredUser(me);
+    return me;
+  }, []);
+
   const logout = useCallback(() => {
     clearAuth();
     setUser(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout }),
-    [user, loading, login, register, logout],
+    () => ({ user, loading, login, register, refreshUser, logout }),
+    [user, loading, login, register, refreshUser, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

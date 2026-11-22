@@ -1,6 +1,5 @@
 import json
 
-import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,6 +8,7 @@ from app.matching.rules import score_resume_job
 from app.models import Job, Resume, User
 from app.services import feedback_service
 from app.services.job_service import job_embedding_text, job_to_dict
+from app.utils import cosine_similarity
 
 RECALL_TOP_N = 20
 
@@ -31,14 +31,6 @@ async def ensure_job_embeddings(db: Session, jobs: list[Job]) -> None:
     for job, vector in zip(pending, vectors, strict=True):
         job.embedding = vector
     db.commit()
-
-
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    va, vb = np.asarray(a, dtype=np.float32), np.asarray(b, dtype=np.float32)
-    denom = float(np.linalg.norm(va) * np.linalg.norm(vb))
-    if denom == 0:
-        return 0.0
-    return float(np.dot(va, vb) / denom)
 
 
 async def match_jobs_for_resume(

@@ -1,13 +1,16 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api } from "../lib/api";
+import { ApiError, api, fetchBlob } from "../lib/api";
 import type { Job, Resume, ResumeOptimize, ResumeVersion } from "../lib/types";
+import { formatDateTime } from "../lib/format";
 import { CheckIcon, UploadIcon } from "../components/icons";
+import { JobPicker } from "../components/JobPicker";
 import {
   Badge,
   Button,
   Card,
   EmptyState,
+  Modal,
   Skeleton,
   Textarea,
   cn,
@@ -39,7 +42,17 @@ function ParsingOverlay() {
   );
 }
 
-function StructuredView({ resume }: { resume: Resume }) {
+function StructuredView({
+  resume,
+  onPreview,
+  onDownload,
+  fileBusy,
+}: {
+  resume: Resume;
+  onPreview: () => void;
+  onDownload: () => void;
+  fileBusy: boolean;
+}) {
   const s = resume.structured;
   const exp = s.expectations || { locations: [], job_types: [] };
 
@@ -59,13 +72,28 @@ function StructuredView({ resume }: { resume: Resume }) {
                 {s.title || "未填写目标职位"} · {s.years_of_experience} 年经验
               </p>
             </div>
-            <div className="space-y-1 text-right text-xs text-muted">
-              <p>期望城市：{exp.locations?.join("、") || "未填写"}</p>
-              <p>
-                期望薪资：
-                {exp.salary_min || exp.salary_max ? `${exp.salary_min ?? "?"}-${exp.salary_max ?? "?"}K` : "未填写"}
-              </p>
-              <p>简历来源：{resume.source === "upload" ? "文件上传" : "文本粘贴"}</p>
+            <div className="flex flex-col items-end gap-2">
+              <div className="space-y-1 text-right text-xs text-muted">
+                <p>期望城市：{exp.locations?.join("、") || "未填写"}</p>
+                <p>
+                  期望薪资：
+                  {exp.salary_min || exp.salary_max ? `${exp.salary_min ?? "?"}-${exp.salary_max ?? "?"}K` : "未填写"}
+                </p>
+                <p>简历来源：{resume.source === "upload" ? "文件上传" : "文本粘贴"}</p>
+                {resume.file && <p>原文件：{resume.file.name}</p>}
+              </div>
+              {resume.file && (
+                <div className="flex gap-2">
+                  {resume.file.previewable && (
+                    <Button size="sm" variant="soft" loading={fileBusy} onClick={onPreview}>
+                      预览原文件
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" disabled={fileBusy} onClick={onDownload}>
+                    下载原文件
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -158,6 +186,17 @@ export function ResumePage() {
   const [optJob, setOptJob] = useState("");
   const [optimizeError, setOptimizeError] = useState("");
   const [optimizeResult, setOptimizeResult] = useState<ResumeOptimize | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [pendingRestore, setPendingRestore] = useState<ResumeVersion | null>(null);
+  const [fileBusy, setFileBusy] = useState(false);
+
+  useEffect(
+    () => () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    },
+    [previewUrl],
+  );
 
   const resumeQuery = useQuery({
     queryKey: ["resume", "mine"],
@@ -179,6 +218,38 @@ export function ResumePage() {
     queryClient.invalidateQueries({ queryKey: ["resume-versions"] });
     queryClient.invalidateQueries({ queryKey: ["match-jobs"] });
     queryClient.invalidateQueries({ queryKey: ["match-detail"] });
+  };
+
+  const loadFileUrl = async () => URL.createObjectURL(await fetchBlob("/resumes/mine/file"));
+
+  const handlePreview = async () => {
+    setError("");
+    setFileBusy(true);
+    try {
+      setPreviewUrl(await loadFileUrl());
+      setPreviewOpen(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "简历原文件加载失败");
+    } finally {
+      setFileBusy(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    setError("");
+    setFileBusy(true);
+    try {
+      const url = await loadFileUrl();
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = resumeQuery.data?.file?.name || "resume";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "简历原文件下载失败");
+    } finally {
+      setFileBusy(false);
+    }
   };
 
   const optimizeMutation = useMutation({
@@ -213,11 +284,15 @@ export function ResumePage() {
     mutationFn: (versionId: number) =>
       api.post<Resume>(`/resumes/versions/${versionId}/restore`),
     onSuccess: (data) => {
+      setPendingRestore(null);
       setNotice("已回滚到所选版本");
       queryClient.setQueryData(["resume", "mine"], data);
       invalidate();
     },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "回滚失败"),
+    onError: (err) => {
+      setPendingRestore(null);
+      setError(err instanceof ApiError ? err.message : "回滚失败");
+    },
   });
 
   const uploadMutation = useMutation({
@@ -392,18 +467,14 @@ export function ResumePage() {
                     <p className="truncate text-xs font-medium">{version.label}</p>
                     <p className="truncate text-[10px] text-muted">
                       {version.note || version.title} ·{" "}
-                      {new Date(version.created_at).toLocaleString("zh-CN")}
+                      {formatDateTime(version.created_at)}
                     </p>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     disabled={restoreMutation.isPending}
-                    onClick={() => {
-                      if (window.confirm(`回滚到「${version.label}」？当前版本会保留为新快照。`)) {
-                        restoreMutation.mutate(version.id);
-                      }
-                    }}
+                    onClick={() => setPendingRestore(version)}
                   >
                     回滚
                   </Button>
@@ -448,19 +519,15 @@ export function ResumePage() {
                       针对目标岗位给出缺失技能与改写建议，应用后生成新版本
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      className="input w-[220px]"
+                  <div className="flex flex-wrap items-center gap-2">
+                    <JobPicker
+                      className="w-[240px]"
+                      ariaLabel="目标岗位"
                       value={optJob}
-                      onChange={(event) => setOptJob(event.target.value)}
-                    >
-                      <option value="">选择目标岗位</option>
-                      {(jobsQuery.data?.items || []).map((job) => (
-                        <option key={job.id} value={job.id}>
-                          {job.title} · {job.company_name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setOptJob}
+                      jobs={jobsQuery.data?.items || []}
+                      placeholder="选择目标岗位"
+                    />
                     <Button
                       size="sm"
                       loading={optimizeMutation.isPending}
@@ -545,11 +612,59 @@ export function ResumePage() {
                 )}
               </Card>
 
-              <StructuredView resume={resumeQuery.data} />
+              <StructuredView
+                resume={resumeQuery.data}
+                onPreview={handlePreview}
+                onDownload={handleDownload}
+                fileBusy={fileBusy}
+              />
             </div>
           )}
         </div>
       </div>
+
+      <Modal
+        open={previewOpen}
+        title={resumeQuery.data?.file?.name || "简历原文件"}
+        onClose={() => setPreviewOpen(false)}
+        width="max-w-4xl"
+      >
+        {previewUrl ? (
+          <iframe
+            src={previewUrl}
+            title="简历原文件预览"
+            className="h-[60vh] w-full rounded-lg border border-line bg-neutral-soft"
+          />
+        ) : (
+          <p className="text-xs text-muted">正在加载…</p>
+        )}
+      </Modal>
+
+      <Modal
+        open={pendingRestore !== null}
+        title="回滚简历版本"
+        onClose={() => setPendingRestore(null)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPendingRestore(null)}>
+              取消
+            </Button>
+            <Button
+              loading={restoreMutation.isPending}
+              onClick={() => pendingRestore && restoreMutation.mutate(pendingRestore.id)}
+            >
+              确认回滚
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-ink">
+          确定回滚到「{pendingRestore?.label}」？
+        </p>
+        <p className="mt-2 text-xs leading-relaxed text-muted">
+          当前简历内容会先保存为一个新的版本快照，回滚后不会丢失。
+        </p>
+      </Modal>
     </div>
   );
 }

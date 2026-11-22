@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -24,18 +23,18 @@ class LoginIn(BaseModel):
     password: str
 
 
-class UserOut(BaseModel):
-    id: int
-    username: str
-    role: str
-    display_name: str
-    company_name: str | None = None
-    created_at: datetime | None = None
+class ProfileUpdateIn(BaseModel):
+    display_name: str = Field(min_length=1, max_length=32)
 
-    model_config = {"from_attributes": True}
+    @field_validator("display_name")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        value = v.strip()
+        if not value:
+            raise ValueError("显示名不能为空")
+        return value
 
 
-class TokenOut(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: UserOut
+class PasswordChangeIn(BaseModel):
+    old_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=6, max_length=64)

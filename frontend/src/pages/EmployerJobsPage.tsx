@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "../lib/api";
+import { JOB_CATEGORIES, JOB_TYPES } from "../lib/jobMeta";
 import type { Job } from "../lib/types";
 import { ArrowRightIcon, PlusIcon } from "../components/icons";
 import {
@@ -11,6 +12,7 @@ import {
   Field,
   Input,
   Modal,
+  Select,
   Skeleton,
   STATUS_META,
   Textarea,
@@ -28,13 +30,34 @@ const EMPTY_FORM = {
   experience_min: "0",
   experience_max: "5",
   location: "上海",
+  district: "",
+  category: "技术研发",
+  job_type: "全职",
   salary_min: "15",
   salary_max: "25",
 };
 
+function jobToForm(job: JobWithCount) {
+  return {
+    title: job.title,
+    description: job.description,
+    required_skills: job.required_skills.join(", "),
+    preferred_skills: job.preferred_skills.join(", "),
+    experience_min: String(job.experience_min),
+    experience_max: String(job.experience_max),
+    location: job.location,
+    district: job.district || "",
+    category: job.category || "其他",
+    job_type: job.job_type || "全职",
+    salary_min: String(job.salary_min),
+    salary_max: String(job.salary_max),
+  };
+}
+
 export function EmployerJobsPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<JobWithCount | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState("");
 
@@ -48,9 +71,30 @@ export function EmployerJobsPage() {
     queryClient.invalidateQueries({ queryKey: ["candidates"] });
   };
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.post<Job>("/jobs", {
+  const closeForm = () => {
+    setOpen(false);
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setError("");
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setError("");
+    setOpen(true);
+  };
+
+  const openEdit = (job: JobWithCount) => {
+    setEditing(job);
+    setForm(jobToForm(job));
+    setError("");
+    setOpen(true);
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const body = {
         title: form.title.trim(),
         description: form.description.trim(),
         required_skills: form.required_skills
@@ -64,16 +108,21 @@ export function EmployerJobsPage() {
         experience_min: Number(form.experience_min) || 0,
         experience_max: Number(form.experience_max) || 0,
         location: form.location.trim() || "不限",
+        district: form.district.trim(),
+        category: form.category,
+        job_type: form.job_type,
         salary_min: Number(form.salary_min) || 0,
         salary_max: Number(form.salary_max) || 0,
-      }),
+      };
+      return editing
+        ? api.put<Job>(`/jobs/${editing.id}`, body)
+        : api.post<Job>("/jobs", body);
+    },
     onSuccess: () => {
-      setOpen(false);
-      setForm(EMPTY_FORM);
-      setError("");
+      closeForm();
       invalidate();
     },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "发布失败"),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "保存失败"),
   });
 
   const toggleMutation = useMutation({
@@ -98,13 +147,7 @@ export function EmployerJobsPage() {
             共 {jobsQuery.data?.items.length || 0} 个岗位
           </span>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            setError("");
-            setOpen(true);
-          }}
-        >
+        <Button size="sm" onClick={openCreate}>
           <PlusIcon className="h-3.5 w-3.5" /> 发布岗位
         </Button>
       </header>
@@ -122,7 +165,7 @@ export function EmployerJobsPage() {
           <EmptyState
             title="还没有发布岗位"
             description="手动发布一个，或者直接对招聘助手说「帮我招一个 Python 后端」。"
-            action={<Button onClick={() => setOpen(true)}>发布第一个岗位</Button>}
+            action={<Button onClick={openCreate}>发布第一个岗位</Button>}
           />
         </div>
       )}
@@ -155,7 +198,7 @@ export function EmployerJobsPage() {
                 <th className="w-[100px]">薪资</th>
                 <th className="w-[70px] text-right">投递</th>
                 <th className="w-[80px]">状态</th>
-                <th className="w-[140px] text-right">操作</th>
+                <th className="w-[180px] text-right">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -182,13 +225,19 @@ export function EmployerJobsPage() {
                     </td>
                     <td className="whitespace-nowrap text-right">
                       <button
+                        onClick={() => openEdit(job)}
+                        className="text-xs font-medium text-ink transition-colors hover:text-primary"
+                      >
+                        编辑
+                      </button>
+                      <button
                         onClick={() =>
                           toggleMutation.mutate({
                             id: job.id,
                             status: job.status === "open" ? "closed" : "open",
                           })
                         }
-                        className="text-xs text-muted transition-colors hover:text-ink"
+                        className="ml-3 text-xs text-muted transition-colors hover:text-ink"
                       >
                         {job.status === "open" ? "关闭" : "重新开放"}
                       </button>
@@ -209,16 +258,16 @@ export function EmployerJobsPage() {
 
       <Modal
         open={open}
-        title="发布新岗位"
+        title={editing ? "编辑岗位" : "发布新岗位"}
         width="max-w-2xl"
-        onClose={() => setOpen(false)}
+        onClose={closeForm}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setOpen(false)}>
+            <Button variant="ghost" onClick={closeForm}>
               取消
             </Button>
-            <Button loading={createMutation.isPending} onClick={() => createMutation.mutate()}>
-              发布岗位
+            <Button loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+              {editing ? "保存修改" : "发布岗位"}
             </Button>
           </>
         }
@@ -231,6 +280,25 @@ export function EmployerJobsPage() {
           </div>
           <Field label="城市">
             <Input value={form.location} onChange={update("location")} placeholder="如 上海" />
+          </Field>
+          <Field label="区县" hint="可选，如 浦东新区">
+            <Input value={form.district} onChange={update("district")} placeholder="城市下一级行政区" />
+          </Field>
+          <Field label="岗位类别">
+            <Select
+              ariaLabel="岗位类别"
+              value={form.category}
+              onChange={(category) => setForm((prev) => ({ ...prev, category }))}
+              options={JOB_CATEGORIES.map((category) => ({ label: category, value: category }))}
+            />
+          </Field>
+          <Field label="工作性质">
+            <Select
+              ariaLabel="工作性质"
+              value={form.job_type}
+              onChange={(jobType) => setForm((prev) => ({ ...prev, job_type: jobType }))}
+              options={JOB_TYPES.map((type) => ({ label: type, value: type }))}
+            />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="薪资下限（K）">

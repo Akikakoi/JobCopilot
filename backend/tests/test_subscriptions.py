@@ -102,6 +102,27 @@ def test_subscription_crud_and_scan(client):
     assert deleted.status_code == 200
 
 
+def test_create_subscription_requires_condition(client):
+    reset_throttle()
+    seeker = register(client, "sub-seeker-empty", "seeker")
+
+    response = client.post(
+        "/api/subscriptions",
+        json={"name": "空订阅", "filters": {}},
+        headers=auth(seeker["access_token"]),
+    )
+    assert response.status_code == 400
+    assert "至少" in response.json()["message"]
+
+    created = create_subscription(client, seeker["access_token"])
+    cleared = client.put(
+        f"/api/subscriptions/{created['id']}",
+        json={"filters": {"keywords": "  "}},
+        headers=auth(seeker["access_token"]),
+    )
+    assert cleared.status_code == 400
+
+
 def test_subscription_permissions(client):
     reset_throttle()
     seeker = register(client, "sub-seeker", "seeker")

@@ -9,10 +9,14 @@ import { ResumePage } from "./pages/ResumePage";
 import { ApplicationsPage } from "./pages/ApplicationsPage";
 import { InterviewPage } from "./pages/InterviewPage";
 import { SubscriptionsPage } from "./pages/SubscriptionsPage";
+import { SavedJobsPage } from "./pages/SavedJobsPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { CompanyPage } from "./pages/CompanyPage";
 import { ChatPage } from "./pages/ChatPage";
 import { EmployerJobsPage } from "./pages/EmployerJobsPage";
 import { EmployerBoardPage } from "./pages/EmployerBoardPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { MessagesPage } from "./pages/MessagesPage";
 
 function RootRedirect() {
   const { user, loading } = useAuth();
@@ -44,10 +48,14 @@ export default function App() {
         <Route index element={<Navigate to="jobs" replace />} />
         <Route path="jobs" element={<SeekerJobsPage />} />
         <Route path="jobs/:id" element={<JobDetailPage />} />
+        <Route path="saved" element={<SavedJobsPage />} />
+        <Route path="companies/:id" element={<CompanyPage />} />
         <Route path="resume" element={<ResumePage />} />
         <Route path="applications" element={<ApplicationsPage />} />
+        <Route path="messages" element={<MessagesPage />} />
         <Route path="interview" element={<InterviewPage />} />
         <Route path="subscriptions" element={<SubscriptionsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="chat" element={<ChatPage />} />
       </Route>
 
@@ -62,6 +70,8 @@ export default function App() {
         <Route index element={<Navigate to="jobs" replace />} />
         <Route path="jobs" element={<EmployerJobsPage />} />
         <Route path="board" element={<EmployerBoardPage />} />
+        <Route path="messages" element={<MessagesPage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="chat" element={<ChatPage />} />
       </Route>
 

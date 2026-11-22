@@ -52,15 +52,6 @@ class ResumePasteIn(BaseModel):
     text: str = Field(min_length=20, description="简历纯文本（兜底输入方式）")
 
 
-class ResumeOut(BaseModel):
-    id: int
-    user_id: int
-    raw_text: str
-    structured: dict
-    source: str
-    has_embedding: bool
-
-
 class OptimizeIn(BaseModel):
     job_id: int
 

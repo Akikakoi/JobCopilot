@@ -13,13 +13,24 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
 @router.get("")
-def list_jobs(
+async def list_jobs(
     keywords: str | None = Query(default=None),
     location: str | None = Query(default=None),
+    district: str | None = Query(default=None),
     salary_min: float | None = Query(default=None),
+    category: str | None = Query(default=None),
+    job_type: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    jobs = job_service.list_jobs(db, keywords=keywords, location=location, salary_min=salary_min)
+    jobs = await job_service.search_jobs(
+        db,
+        keywords=keywords,
+        location=location,
+        district=district,
+        salary_min=salary_min,
+        category=category,
+        job_type=job_type,
+    )
     return ok({"items": [job_service.job_to_dict(j) for j in jobs], "total": len(jobs)})
 
 
@@ -36,6 +47,18 @@ def my_jobs(
             db.scalar(select(func.count(Application.id)).where(Application.job_id == job.id)) or 0
         )
         items.append(data)
+    return ok({"items": items, "total": len(items)})
+
+
+@router.get("/mine/saved")
+def my_saved_jobs(
+    user: User = Depends(require_role("seeker")),
+    db: Session = Depends(get_db),
+):
+    jobs = feedback_service.list_saved_jobs(db, user.id)
+    items = [
+        {**job_service.job_to_dict(job), "my_feedback": "save"} for job in jobs
+    ]
     return ok({"items": items, "total": len(items)})
 
 

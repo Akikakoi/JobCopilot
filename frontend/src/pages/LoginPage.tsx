@@ -1,21 +1,50 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ApiError } from "../lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { ApiError, api } from "../lib/api";
 import { homePath, useAuth } from "../lib/auth";
-import { Button, Field, Input } from "../components/ui";
+import { Button, Field, Input, Modal } from "../components/ui";
 
 const DEMOS = [
-  { label: "求职者 张三", username: "zhangsan", note: "已挂简历" },
-  { label: "招聘方 李 HR", username: "hr-li", note: "星澜科技" },
+  { label: "求职者 张三", username: "zhangsan", note: "已挂简历", kind: "seeker" as const },
+  {
+    label: "招聘方 李 HR",
+    username: "",
+    note: "选择公司账号（34 个公司）",
+    kind: "employer" as const,
+  },
 ];
 
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState("zhangsan");
-  const [password, setPassword] = useState("demo1234");
+  const [password, setPassword] = useState("123456");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [keyword, setKeyword] = useState("");
+
+  const demoQuery = useQuery({
+    queryKey: ["demo-accounts"],
+    queryFn: () =>
+      api.get<{ password: string; employers: { username: string; company_name: string }[] }>(
+        "/auth/demo-accounts",
+      ),
+    enabled: pickerOpen,
+    staleTime: 5 * 60_000,
+  });
+
+  const employers = (demoQuery.data?.employers || []).filter((item) =>
+    item.company_name.includes(keyword.trim()),
+  );
+
+  const fillAccount = (account: string) => {
+    setUsername(account);
+    setPassword("123456");
+    setPickerOpen(false);
+    setKeyword("");
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -98,15 +127,20 @@ export function LoginPage() {
           </form>
 
           <div className="mt-8 border-t border-line pt-4">
-            <p className="mb-2 text-[11px] font-semibold text-muted">演示账号 · 密码 demo1234</p>
+            <p className="mb-2 text-[11px] font-semibold text-muted">演示账号 · 密码 123456</p>
             <div className="divide-y divide-line border-y border-line">
               {DEMOS.map((demo) => (
                 <button
-                  key={demo.username}
+                  key={demo.label}
                   type="button"
                   onClick={() => {
+                    if (demo.kind === "employer") {
+                      setKeyword("");
+                      setPickerOpen(true);
+                      return;
+                    }
                     setUsername(demo.username);
-                    setPassword("demo1234");
+                    setPassword("123456");
                   }}
                   className="flex w-full items-center justify-between py-2.5 text-left transition-colors hover:text-primary"
                 >
@@ -114,7 +148,9 @@ export function LoginPage() {
                     <span className="block text-xs font-medium">{demo.label}</span>
                     <span className="block text-[11px] text-muted">{demo.note}</span>
                   </span>
-                  <span className="text-[11px] text-primary">填入</span>
+                  <span className="text-[11px] text-primary">
+                    {demo.kind === "employer" ? "选择" : "填入"}
+                  </span>
                 </button>
               ))}
             </div>
@@ -128,6 +164,63 @@ export function LoginPage() {
           </p>
         </div>
       </section>
+
+      <Modal
+        open={pickerOpen}
+        title="选择招聘方账号"
+        onClose={() => setPickerOpen(false)}
+        footer={
+          <Button variant="ghost" onClick={() => setPickerOpen(false)}>
+            取消
+          </Button>
+        }
+      >
+        <p className="text-xs leading-relaxed text-muted">
+          招聘方账号为公司拼音，公司名在系统内仍显示中文；选择后会填入登录表单，密码统一为 123456。
+        </p>
+        <div className="mt-3">
+          <Input
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder="搜索公司名，如 星澜科技"
+          />
+        </div>
+
+        {demoQuery.isLoading && (
+          <p className="mt-4 text-center text-[11px] text-muted">正在加载账号列表…</p>
+        )}
+        {demoQuery.isError && (
+          <p className="mt-4 rounded-lg border border-danger bg-danger-soft px-3 py-2 text-[11px] text-danger">
+            账号列表加载失败，请稍后重试。
+          </p>
+        )}
+        {!demoQuery.isLoading && !demoQuery.isError && employers.length === 0 && (
+          <p className="mt-4 text-center text-[11px] text-muted">没有匹配的公司账号</p>
+        )}
+        {employers.length > 0 && (
+          <div className="mt-3 max-h-[280px] overflow-y-auto border-y border-line">
+            {employers.map((item) => (
+              <button
+                key={item.username}
+                type="button"
+                onClick={() => fillAccount(item.username)}
+                className="flex w-full items-center justify-between gap-3 border-b border-line px-1 py-2.5 text-left transition-colors last:border-b-0 hover:text-primary"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-medium">{item.username}</span>
+                  <span className="block truncate text-[10px] text-muted">
+                    公司：{item.company_name}
+                  </span>
+                </span>
+                <span className="shrink-0 text-[11px] text-primary">填入</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="mt-3 text-[10px] text-muted">
+          共 {demoQuery.data?.employers.length || 0} 个招聘方账号，可按公司名筛选。
+        </p>
+      </Modal>
     </div>
   );
 }

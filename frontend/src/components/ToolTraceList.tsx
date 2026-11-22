@@ -3,7 +3,7 @@ import type { ToolTrace } from "../lib/types";
 import { CheckIcon, ChevronIcon } from "./icons";
 import { cn } from "./ui";
 
-export const TOOL_LABELS: Record<string, string> = {
+const TOOL_LABELS: Record<string, string> = {
   get_my_resume: "读取简历",
   search_jobs: "检索岗位",
   get_job_detail: "查看岗位详情",
@@ -22,6 +22,13 @@ export const TOOL_LABELS: Record<string, string> = {
   screen_candidate: "深度评估候选人",
   rank_candidates: "候选人排序",
   update_application_status: "推进候选人状态",
+  list_my_pipeline: "查询投递进展",
+  respond_interview_invite: "响应面试邀约",
+  respond_offer: "响应 Offer",
+  create_interview_invite: "发送面试邀约",
+  cancel_interview_invite: "取消面试邀约",
+  complete_interview_invite: "标记面试完成",
+  create_offer: "发送 Offer",
 };
 
 export function ToolTraceList({ traces }: { traces: ToolTrace[] }) {

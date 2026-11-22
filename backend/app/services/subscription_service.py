@@ -1,13 +1,14 @@
 """订阅与站内通知：订阅 CRUD + 增量扫描新岗位 + 通知读写。"""
 
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.matching.rules import score_resume_job
 from app.models import Job, Notification, Resume, Subscription, User
+from app.utils import utcnow
 
 SCAN_THROTTLE_SECONDS = 600
 # 订阅上次扫描时间：进程内节流即可（单机演示，重启后允许立即再扫）
@@ -18,8 +19,19 @@ class SubscriptionError(ValueError):
     pass
 
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+EMPTY_FILTER_MESSAGE = "请至少填写一个订阅条件：关键词、城市、最低月薪、技能或最低匹配分"
+
+
+def _has_condition(filters: dict) -> bool:
+    """订阅至少要有一个筛选条件，否则等于订阅全部新岗位。"""
+    filters = filters or {}
+    return bool(
+        (filters.get("keywords") or "").strip()
+        or (filters.get("location") or "").strip()
+        or filters.get("salary_min") is not None
+        or [item for item in (filters.get("skills") or []) if str(item).strip()]
+        or filters.get("match_score_min") is not None
+    )
 
 
 def subscription_to_dict(subscription: Subscription) -> dict:
@@ -44,13 +56,16 @@ def list_subscriptions(db: Session, user: User) -> list[Subscription]:
 
 
 def create_subscription(db: Session, user: User, name: str, filters: dict, active: bool) -> Subscription:
+    if not _has_condition(filters):
+        raise SubscriptionError(EMPTY_FILTER_MESSAGE)
+
     subscription = Subscription(
         user_id=user.id,
         name=name.strip(),
         filters=filters,
         active=active,
         # 留 60 秒宽限，避免与「刚发布的岗位」在同一秒被时间精度吞掉
-        last_checked_at=_utcnow() - timedelta(seconds=60),
+        last_checked_at=utcnow() - timedelta(seconds=60),
     )
     db.add(subscription)
     db.commit()
@@ -72,6 +87,8 @@ def update_subscription(
     if "name" in data and data["name"] is not None:
         subscription.name = data["name"].strip()
     if "filters" in data and data["filters"] is not None:
+        if not _has_condition(data["filters"]):
+            raise SubscriptionError(EMPTY_FILTER_MESSAGE)
         subscription.filters = data["filters"]
     if "active" in data and data["active"] is not None:
         subscription.active = bool(data["active"])
@@ -127,7 +144,7 @@ def _resume_of(db: Session, user_id: int) -> Resume | None:
 
 def scan_for_user(db: Session, user: User) -> dict:
     """扫描新增岗位并写入站内通知。同一用户 10 分钟内只真正扫一次。"""
-    now = _utcnow()
+    now = utcnow()
     last = _last_scan.get(user.id)
     if last is not None and (time.time() - last) < SCAN_THROTTLE_SECONDS:
         return {"skipped": True, "created": 0, "scanned": 0}
@@ -241,7 +258,7 @@ def mark_read(db: Session, user: User, notification_id: int) -> Notification:
     if notification is None or notification.user_id != user.id:
         raise PermissionError("通知不存在或无权操作")
     if notification.read_at is None:
-        notification.read_at = _utcnow()
+        notification.read_at = utcnow()
         db.commit()
         db.refresh(notification)
     return notification
@@ -249,7 +266,7 @@ def mark_read(db: Session, user: User, notification_id: int) -> Notification:
 
 def mark_all_read(db: Session, user: User) -> int:
     notifications, _ = list_notifications(db, user, unread_only=True, limit=500)
-    now = _utcnow()
+    now = utcnow()
     for notification in notifications:
         notification.read_at = now
     db.commit()

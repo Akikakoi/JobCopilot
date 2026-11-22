@@ -28,9 +28,12 @@ def create_subscription(
     user: User = Depends(require_role("seeker")),
     db: Session = Depends(get_db),
 ):
-    subscription = subscription_service.create_subscription(
-        db, user, payload.name, payload.filters.model_dump(), payload.active
-    )
+    try:
+        subscription = subscription_service.create_subscription(
+            db, user, payload.name, payload.filters.model_dump(), payload.active
+        )
+    except subscription_service.SubscriptionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok(
         subscription_service.subscription_to_dict(subscription), message="订阅已创建"
     )
@@ -59,6 +62,8 @@ def update_subscription(
         }
     try:
         subscription = subscription_service.update_subscription(db, user, subscription_id, data)
+    except subscription_service.SubscriptionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return ok(

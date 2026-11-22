@@ -217,3 +217,103 @@ def test_resume_upload_rejects_unsupported_type(client):
     )
     assert response.status_code == 400
     assert "不支持" in response.json()["message"]
+
+
+def test_resume_upload_keeps_file_for_preview(client, monkeypatch):
+    async def fake_extract(raw_text):  # noqa: ARG001
+        return standard_structured()
+
+    async def fake_embed(text):  # noqa: ARG001
+        return [0.1] * 8
+
+    monkeypatch.setattr("app.services.resume_service.extract_structured", fake_extract)
+    monkeypatch.setattr("app.services.resume_service.embed_one", fake_embed)
+    seeker = register(client, "file-seeker", "seeker")
+    other = register(client, "file-seeker2", "seeker")
+
+    assert client.get("/api/resumes/mine/file", headers=auth(seeker["access_token"])).status_code == 404
+
+    uploaded = client.post(
+        "/api/resumes/upload",
+        headers=auth(seeker["access_token"]),
+        files={"file": ("resume.txt", b"zhangsan python backend engineer", "text/plain")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    info = uploaded.json()["data"]["file"]
+    assert info["name"] == "resume.txt"
+    assert info["previewable"] is False
+
+    fetched = client.get("/api/resumes/mine/file", headers=auth(seeker["access_token"]))
+    assert fetched.status_code == 200
+    assert "resume.txt" in fetched.headers["content-disposition"]
+    assert fetched.content == b"zhangsan python backend engineer"
+
+    # 其他用户读不到别人的原文件
+    assert client.get("/api/resumes/mine/file", headers=auth(other["access_token"])).status_code == 404
+
+    # 重新上传覆盖旧文件，resume_files 只保留一条
+    again = client.post(
+        "/api/resumes/upload",
+        headers=auth(seeker["access_token"]),
+        files={"file": ("resume_v2.txt", b"python backend v2", "text/plain")},
+    )
+    assert again.status_code == 200, again.text
+    assert again.json()["data"]["file"]["name"] == "resume_v2.txt"
+
+    from app.db import SessionLocal
+    from app.models import ResumeFile
+
+    with SessionLocal() as db:
+        assert db.query(ResumeFile).count() == 1
+
+
+def test_demo_accounts_endpoint(client):
+    register(client, "demo-hr", "employer", company="星澜科技")
+
+    response = client.get("/api/auth/demo-accounts")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["password"] == "123456"
+    assert {
+        "username": "demo-hr",
+        "company_name": "星澜科技",
+    } in data["employers"]
+
+
+def test_all_candidates_endpoint(client):
+    employer = register(client, "all-hr", "employer", company="星澜科技")
+    seeker1 = register(client, "all-seeker1", "seeker")
+    seeker2 = register(client, "all-seeker2", "seeker")
+    job1 = create_job(client, employer["access_token"], title="Python 后端")
+    job2 = create_job(client, employer["access_token"], title="数据工程师")
+
+    for seeker in (seeker1, seeker2):
+        attach_resume(seeker["user"]["id"], [0.1] * 8, standard_structured())
+    set_job_embedding(job1["id"], [0.1] * 8)
+    set_job_embedding(job2["id"], [0.1] * 8)
+
+    for seeker, job in ((seeker1, job1), (seeker2, job2)):
+        applied = client.post(
+            "/api/applications",
+            json={"job_id": job["id"]},
+            headers=auth(seeker["access_token"]),
+        )
+        assert applied.status_code == 200, applied.text
+
+    all_items = client.get(
+        "/api/match/candidates", headers=auth(employer["access_token"])
+    ).json()["data"]["items"]
+    assert len(all_items) == 2
+    assert {item["job_title"] for item in all_items} == {"Python 后端", "数据工程师"}
+    assert all_items[0]["match_score"] >= all_items[-1]["match_score"]
+
+    filtered = client.get(
+        f"/api/match/candidates?job_id={job1['id']}",
+        headers=auth(employer["access_token"]),
+    ).json()["data"]["items"]
+    assert len(filtered) == 1
+    assert filtered[0]["job_id"] == job1["id"]
+
+    # 求职者不能访问该接口
+    forbidden = client.get("/api/match/candidates", headers=auth(seeker1["access_token"]))
+    assert forbidden.status_code == 403

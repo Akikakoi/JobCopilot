@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "../lib/api";
 import type { Subscription } from "../lib/types";
+import { formatDateTime } from "../lib/format";
 import { BellIcon, PlusIcon } from "../components/icons";
-import { Badge, Button, Card, EmptyState, Field, Input, Skeleton, cn } from "../components/ui";
-
-const CITIES = ["上海", "北京", "深圳", "杭州", "广州", "成都", "苏州", "武汉", "南京", "西安", "远程"];
+import { Badge, Button, Card, EmptyState, Field, Input, Modal, Skeleton, cn } from "../components/ui";
+import { CityPicker } from "../components/CityPicker";
 
 const EMPTY_FORM = {
   name: "",
@@ -25,6 +25,7 @@ function toNumber(value: string): number | null {
 export function SubscriptionsPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState(EMPTY_FORM);
+  const [pendingDelete, setPendingDelete] = useState<Subscription | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -66,8 +67,14 @@ export function SubscriptionsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.del(`/subscriptions/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subscriptions"] }),
-    onError: (err) => setError(err instanceof ApiError ? err.message : "删除失败"),
+    onSuccess: () => {
+      setPendingDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+    },
+    onError: (err) => {
+      setPendingDelete(null);
+      setError(err instanceof ApiError ? err.message : "删除失败");
+    },
   });
 
   const scanMutation = useMutation({
@@ -92,6 +99,15 @@ export function SubscriptionsPage() {
     setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
   const items = listQuery.data?.items || [];
+
+  // 至少填一个条件，否则订阅等于「全部新岗位」，容易被误创建
+  const hasFilter = Boolean(
+    form.keywords.trim() ||
+      form.location.trim() ||
+      form.salary_min.trim() ||
+      form.skills.trim() ||
+      form.match_score_min.trim()
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
@@ -137,18 +153,12 @@ export function SubscriptionsPage() {
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="城市">
-                <select
-                  className="input"
+                <CityPicker
+                  ariaLabel="城市"
+                  placeholder="不限"
                   value={form.location}
-                  onChange={(event) => setForm({ ...form, location: event.target.value })}
-                >
-                  <option value="">不限</option>
-                  {CITIES.map((city) => (
-                    <option key={city} value={city}>
-                      {city}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(location) => setForm({ ...form, location })}
+                />
               </Field>
               <Field label="最低月薪（K）">
                 <Input
@@ -175,10 +185,16 @@ export function SubscriptionsPage() {
             <Button
               className="w-full"
               loading={createMutation.isPending}
+              disabled={!hasFilter}
               onClick={() => createMutation.mutate()}
             >
               <PlusIcon className="h-4 w-4" /> 创建订阅
             </Button>
+            {!hasFilter && (
+              <p className="text-[11px] text-muted">
+                请至少填写一个条件（关键词、城市、最低月薪、技能或匹配分），否则等于订阅全部新岗位。
+              </p>
+            )}
           </div>
         </Card>
 
@@ -229,6 +245,7 @@ export function SubscriptionsPage() {
                       {!subscription.filters.keywords &&
                         !subscription.filters.location &&
                         subscription.filters.salary_min == null &&
+                        subscription.filters.match_score_min == null &&
                         !(subscription.filters.skills || []).length && (
                           <span className="text-[11px] text-muted">全部新岗位</span>
                         )}
@@ -236,7 +253,7 @@ export function SubscriptionsPage() {
                     <p className="mt-2 text-[11px] text-muted">
                       上次扫描：
                       {subscription.last_checked_at
-                        ? new Date(subscription.last_checked_at).toLocaleString("zh-CN")
+                        ? formatDateTime(subscription.last_checked_at)
                         : "尚未扫描"}
                     </p>
                   </div>
@@ -258,11 +275,7 @@ export function SubscriptionsPage() {
                       size="sm"
                       className="text-danger hover:bg-danger-soft"
                       disabled={deleteMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm(`删除订阅「${subscription.name}」？`)) {
-                          deleteMutation.mutate(subscription.id);
-                        }
-                      }}
+                      onClick={() => setPendingDelete(subscription)}
                     >
                       删除
                     </Button>
@@ -273,6 +286,33 @@ export function SubscriptionsPage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        open={pendingDelete !== null}
+        title="删除订阅"
+        onClose={() => setPendingDelete(null)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPendingDelete(null)}>
+              取消
+            </Button>
+            <Button
+              variant="danger"
+              loading={deleteMutation.isPending}
+              onClick={() => pendingDelete && deleteMutation.mutate(pendingDelete.id)}
+            >
+              确认删除
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-ink">
+          确定删除订阅「{pendingDelete?.name}」？
+        </p>
+        <p className="mt-2 text-xs leading-relaxed text-muted">
+          删除后该订阅不再生效，也不会再推送匹配的岗位提醒；已产生的站内通知会保留。
+        </p>
+      </Modal>
     </div>
   );
 }

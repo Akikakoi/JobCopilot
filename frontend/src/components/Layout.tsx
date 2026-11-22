@@ -1,17 +1,20 @@
 import { useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import {
+  BellIcon,
   BoardIcon,
+  BookmarkIcon,
   BriefcaseIcon,
   ChatIcon,
   FileIcon,
   LogoutIcon,
+  MailIcon,
   MicIcon,
   SendIcon,
-  BellIcon,
+  SettingsIcon,
 } from "./icons";
 import { NotificationBell } from "./NotificationBell";
 import { cn } from "./ui";
@@ -24,17 +27,22 @@ interface NavItem {
 
 const SEEKER_NAV: NavItem[] = [
   { to: "/seeker/jobs", label: "找岗位", icon: BriefcaseIcon },
+  { to: "/seeker/saved", label: "我的收藏", icon: BookmarkIcon },
   { to: "/seeker/chat", label: "AI 求职助手", icon: ChatIcon },
   { to: "/seeker/interview", label: "面试训练", icon: MicIcon },
   { to: "/seeker/subscriptions", label: "岗位订阅", icon: BellIcon },
   { to: "/seeker/resume", label: "我的简历", icon: FileIcon },
   { to: "/seeker/applications", label: "我的投递", icon: SendIcon },
+  { to: "/seeker/messages", label: "消息", icon: MailIcon },
+  { to: "/seeker/settings", label: "设置", icon: SettingsIcon },
 ];
 
 const EMPLOYER_NAV: NavItem[] = [
   { to: "/employer/jobs", label: "岗位管理", icon: BriefcaseIcon },
   { to: "/employer/board", label: "候选人看板", icon: BoardIcon },
+  { to: "/employer/messages", label: "消息", icon: MailIcon },
   { to: "/employer/chat", label: "AI 招聘助手", icon: ChatIcon },
+  { to: "/employer/settings", label: "设置", icon: SettingsIcon },
 ];
 
 function todayLabel() {
@@ -50,6 +58,14 @@ export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const unreadQuery = useQuery({
+    queryKey: ["conversation-unread"],
+    queryFn: () => api.get<{ unread: number }>("/conversations/unread-count"),
+    enabled: Boolean(user),
+    refetchInterval: 30_000,
+  });
+  const unread = unreadQuery.data?.unread || 0;
 
   // 登录后触发一次订阅扫描（服务端 10 分钟节流），随后刷新通知角标
   useEffect(() => {
@@ -82,14 +98,14 @@ export function Layout() {
               <span className="text-[15px] font-semibold">JobCopilot</span>
             </NavLink>
 
-            <nav className="hidden h-14 items-center gap-0.5 md:flex">
+            <nav className="hidden h-14 min-w-0 flex-1 items-center gap-0.5 overflow-x-auto md:flex">
               {SEEKER_NAV.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) =>
                     cn(
-                      "flex h-14 items-center border-b-2 px-3 text-[13px] transition-colors",
+                      "flex h-14 shrink-0 items-center whitespace-nowrap border-b-2 px-2.5 text-[13px] transition-colors",
                       isActive
                         ? "border-primary font-semibold text-primary"
                         : "border-transparent text-muted hover:text-ink",
@@ -97,6 +113,11 @@ export function Layout() {
                   }
                 >
                   {item.label}
+                  {item.to === "/seeker/messages" && unread > 0 && (
+                    <span className="ml-1 rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-danger">
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
                 </NavLink>
               ))}
             </nav>
@@ -124,6 +145,11 @@ export function Layout() {
                 }
               >
                 {item.label}
+                  {item.to === "/seeker/messages" && unread > 0 && (
+                    <span className="ml-1 rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-danger">
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
               </NavLink>
             ))}
           </nav>
@@ -178,7 +204,12 @@ export function Layout() {
                     <Icon
                       className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted")}
                     />
-                    <span>{item.label}</span>
+                    <span className="flex-1">{item.label}</span>
+                    {item.to === "/employer/messages" && unread > 0 && (
+                      <span className="rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-danger">
+                        {unread > 99 ? "99+" : unread}
+                      </span>
+                    )}
                   </>
                 )}
               </NavLink>
@@ -232,6 +263,11 @@ export function Layout() {
                 }
               >
                 {item.label}
+                {item.to === "/employer/messages" && unread > 0 && (
+                  <span className="ml-1 rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-danger">
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                )}
               </NavLink>
             ))}
             <button onClick={signOut} className="p-1 text-muted" title="退出登录">

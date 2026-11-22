@@ -278,7 +278,13 @@ export function JobDetailPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-muted">
-                  {job.company_name} · {job.company_industry} · {job.location}
+                  <Link
+                    to={`/seeker/companies/${job.company_id}`}
+                    className="font-medium text-ink hover:underline"
+                  >
+                    {job.company_name}
+                  </Link>
+                  {job.company_industry ? ` · ${job.company_industry}` : ""} · {job.location}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Badge tone={job.status === "open" ? "success" : "default"}>

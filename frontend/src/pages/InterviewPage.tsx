@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "../lib/api";
 import type { Interview, InterviewSummary, Job } from "../lib/types";
 import { ArrowRightIcon, MicIcon } from "../components/icons";
+import { JobPicker } from "../components/JobPicker";
 import { InterviewReportView } from "../components/InterviewReportView";
 import {
   Badge,
@@ -118,18 +119,14 @@ export function InterviewPage() {
         <div className="space-y-4">
           <Card className="p-5">
             <p className="text-[11px] font-semibold text-muted">开始新面试</p>
-            <select
-              className="input mt-3"
+            <JobPicker
+              className="mt-3"
+              ariaLabel="目标岗位"
               value={selectedJob}
-              onChange={(event) => setSelectedJob(event.target.value)}
-            >
-              <option value="">选择目标岗位</option>
-              {(jobsQuery.data?.items || []).map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.title} · {job.company_name}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedJob}
+              jobs={jobsQuery.data?.items || []}
+              placeholder="选择目标岗位"
+            />
             <Button
               className="mt-3 w-full"
               loading={createMutation.isPending}

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import type { AppNotification } from "../lib/types";
 import { BellIcon } from "./icons";
 import { Button, cn } from "./ui";
@@ -10,9 +12,11 @@ const PANEL_WIDTH = 320;
 const GAP = 8;
 
 export function NotificationBell({ align = "right" }: { align?: "left" | "right" }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -73,6 +77,20 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
     }
     setOpen(false);
     const jobId = notification.payload?.job_id;
+    const isEmployerNotification =
+      notification.type === "interview_response" || notification.type === "offer_response";
+    if (isEmployerNotification || user?.role === "employer") {
+      navigate(jobId ? `/employer/board?jobId=${jobId}` : "/employer/board");
+      return;
+    }
+    if (
+      notification.type === "application_status" ||
+      notification.type === "interview_invite" ||
+      notification.type === "offer"
+    ) {
+      navigate("/seeker/applications");
+      return;
+    }
     if (jobId) {
       window.open(`/seeker/jobs/${jobId}`, "_blank", "noopener,noreferrer");
     }
@@ -119,7 +137,9 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
                 <div className="px-4 py-10 text-center">
                   <p className="text-xs font-medium text-ink">暂无通知</p>
                   <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                    创建岗位订阅后，新发布的匹配岗位会在这里提醒你。
+                    {user?.role === "employer"
+                      ? "候选人的面试确认与 Offer 回复会在这里提醒你。"
+                      : "新岗位推荐、面试邀约与投递状态更新会在这里提醒你。"}
                   </p>
                 </div>
               )}
@@ -154,7 +174,16 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
                           匹配 {Math.round(notification.payload.match_score)} 分
                         </span>
                       )}
+                      {notification.type === "application_status" &&
+                        notification.payload?.status_label && (
+                          <span className="text-primary">{notification.payload.status_label}</span>
+                        )}
                     </span>
+                    {notification.type === "application_status" && notification.payload?.note && (
+                      <span className="mt-0.5 block text-[10px] text-muted">
+                        备注：{notification.payload.note}
+                      </span>
+                    )}
                     {notification.payload?.subscription_name && (
                       <span className="mt-0.5 block text-[10px] text-muted">
                         来自订阅「{notification.payload.subscription_name}」

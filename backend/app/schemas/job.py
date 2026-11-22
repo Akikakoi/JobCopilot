@@ -15,6 +15,9 @@ class JobCreate(BaseModel):
     experience_min: int = Field(default=0, ge=0, le=30)
     experience_max: int = Field(default=10, ge=0, le=30)
     location: str = "不限"
+    district: str = ""
+    category: str = "其他"
+    job_type: str = "全职"
     salary_min: float = Field(default=0, ge=0)
     salary_max: float = Field(default=0, ge=0)
     status: str = "open"
@@ -38,6 +41,9 @@ class JobUpdate(BaseModel):
     experience_min: int | None = None
     experience_max: int | None = None
     location: str | None = None
+    district: str | None = None
+    category: str | None = None
+    job_type: str | None = None
     salary_min: float | None = None
     salary_max: float | None = None
     status: str | None = None
