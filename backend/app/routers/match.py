@@ -51,14 +51,13 @@ async def job_match_detail(
     application = db.scalar(
         select(Application).where(Application.user_id == user.id, Application.job_id == job_id)
     )
-    if application and application.match_explanation:
-        explanation = application.match_explanation
-    else:
-        explanation = await pipeline.explain_match(resume, job, scoring)
-        if application:
-            application.match_score = scoring["total"]
-            application.match_explanation = explanation
-            db.commit()
+    # 解读走独立缓存（按 resume+job 指纹）：未投递也不重复调 LLM
+    explanation = await pipeline.get_cached_explanation(db, resume, job, scoring)
+    if application:
+        # 投递记录同步最新解读与分数，供招聘方端查看
+        application.match_score = scoring["total"]
+        application.match_explanation = explanation
+        db.commit()
 
     return ok(
         {

@@ -22,6 +22,7 @@ export interface Job {
   location: string;
   district: string;
   category: string;
+  subcategory: string;
   job_type: string;
   salary_min: number;
   salary_max: number;
@@ -55,7 +56,37 @@ interface ResumeStructured {
     salary_min?: number | null;
     salary_max?: number | null;
     job_types: string[];
+    target_title?: string;
+    categories?: string[];
+    subcategories?: string[];
   };
+}
+
+export interface JobIntent {
+  target_title: string;
+  categories: string[];
+  subcategories: string[];
+  locations: string[];
+  districts: Record<string, string[]>;
+  salary_min: number | null;
+  salary_max: number | null;
+  job_types: string[];
+  has_resume: boolean;
+}
+
+export interface JobFit {
+  category: string;
+  subcategory: string;
+  fit_score: number;
+  reason: string;
+  gap: string;
+}
+
+export interface JobDiagnosis {
+  positioning: string;
+  fits: JobFit[];
+  risks: string[];
+  next_steps: string[];
 }
 
 interface ResumeFileInfo {
@@ -152,7 +183,7 @@ export interface Offer {
   start_date: string;
   expires_at: string | null;
   note: string;
-  status: "pending" | "accepted" | "declined" | "expired";
+  status: "pending" | "accepted" | "declined" | "expired" | "withdrawn";
   status_label: string;
   response_note: string;
   responded_at: string | null;

@@ -336,3 +336,25 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class MatchExplanation(Base):
+    """匹配解读缓存：按 (resume_id, job_id) 存 LLM 解读，与投递解耦。
+
+    指纹 = 简历结构化内容 + 岗位关键字段的哈希；简历或岗位变更后指纹不匹配，
+    下次读取时自动重新生成。未投递岗位的解读也走这里，避免重复调 LLM。
+    """
+
+    __tablename__ = "match_explanations"
+    __table_args__ = (UniqueConstraint("resume_id", "job_id", name="uq_explanation_resume_job"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    resume_id: Mapped[int] = mapped_column(ForeignKey("resumes.id"), index=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), index=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), default="")
+    match_score: Mapped[float] = mapped_column(Float, default=0)
+    explanation: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )

@@ -4,7 +4,8 @@ import { ApiError, api, fetchBlob } from "../lib/api";
 import type { Job, Resume, ResumeOptimize, ResumeVersion } from "../lib/types";
 import { formatDateTime } from "../lib/format";
 import { CheckIcon, UploadIcon } from "../components/icons";
-import { JobPicker } from "../components/JobPicker";
+import { JobCategoryPicker } from "../components/JobCategoryPicker";
+import { JobIntentPanel } from "../components/JobIntentPanel";
 import {
   Badge,
   Button,
@@ -183,7 +184,8 @@ export function ResumePage() {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [optJob, setOptJob] = useState("");
+  const [optCategory, setOptCategory] = useState("");
+  const [optSubcategory, setOptSubcategory] = useState("");
   const [optimizeError, setOptimizeError] = useState("");
   const [optimizeResult, setOptimizeResult] = useState<ResumeOptimize | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -253,7 +255,11 @@ export function ResumePage() {
   };
 
   const optimizeMutation = useMutation({
-    mutationFn: (jobId: number) => api.post<ResumeOptimize>("/resumes/optimize", { job_id: jobId }),
+    mutationFn: (target: { category: string; subcategory: string }) =>
+      api.post<ResumeOptimize>("/resumes/optimize", {
+        category: target.category,
+        subcategory: target.subcategory || null,
+      }),
     onSuccess: (data) => {
       setOptimizeError("");
       setOptimizeResult(data);
@@ -267,7 +273,8 @@ export function ResumePage() {
   const applyMutation = useMutation({
     mutationFn: () =>
       api.post<Resume>("/resumes/optimize/apply", {
-        job_id: Number(optJob),
+        category: optCategory,
+        subcategory: optSubcategory || null,
         skills_to_add: optimizeResult?.skills_to_add || [],
       }),
     onSuccess: (data) => {
@@ -509,32 +516,43 @@ export function ResumePage() {
 
           {resumeQuery.data && (
             <div className="space-y-4">
+              <JobIntentPanel
+                jobs={jobsQuery.data?.items || []}
+                onSaved={() => queryClient.invalidateQueries({ queryKey: ["jobs"] })}
+              />
+
               <Card className="p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-[11px] font-semibold text-muted">
-                      按岗位优化
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-muted">
-                      针对目标岗位给出缺失技能与改写建议，应用后生成新版本
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <JobPicker
-                      className="w-[240px]"
-                      ariaLabel="目标岗位"
-                      value={optJob}
-                      onChange={setOptJob}
+                <div>
+                  <p className="text-[11px] font-semibold text-muted">
+                    按岗位优化
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    按岗位类别与方向汇总在招要求，给出缺失技能与改写建议，应用后生成新版本
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <JobCategoryPicker
+                      className="w-[280px]"
                       jobs={jobsQuery.data?.items || []}
-                      placeholder="选择目标岗位"
+                      category={optCategory}
+                      subcategory={optSubcategory}
+                      onChange={(category, subcategory) => {
+                        setOptCategory(category);
+                        setOptSubcategory(subcategory);
+                        setOptimizeResult(null);
+                        setOptimizeError("");
+                      }}
                     />
                     <Button
                       size="sm"
+                      className="ml-auto"
                       loading={optimizeMutation.isPending}
-                      disabled={!optJob}
+                      disabled={!optCategory}
                       onClick={() => {
                         setOptimizeError("");
-                        optimizeMutation.mutate(Number(optJob));
+                        optimizeMutation.mutate({
+                          category: optCategory,
+                          subcategory: optSubcategory,
+                        });
                       }}
                     >
                       生成建议
@@ -631,9 +649,9 @@ export function ResumePage() {
       >
         {previewUrl ? (
           <iframe
-            src={previewUrl}
+            src={`${previewUrl}#page=1`}
             title="简历原文件预览"
-            className="h-[60vh] w-full rounded-lg border border-line bg-neutral-soft"
+            className="h-[calc(65vh-2.5rem)] w-full rounded-lg border border-line bg-neutral-soft"
           />
         ) : (
           <p className="text-xs text-muted">正在加载…</p>

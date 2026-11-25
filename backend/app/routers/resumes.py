@@ -11,7 +11,13 @@ from app.db import get_db
 from app.deps import require_role
 from app.models import Resume, User
 from app.schemas.common import ok
-from app.schemas.resume import OptimizeApplyIn, OptimizeIn, ResumePasteIn
+from app.schemas.resume import (
+    DiagnoseIn,
+    JobIntentIn,
+    OptimizeApplyIn,
+    OptimizeIn,
+    ResumePasteIn,
+)
 from app.services import resume_parser, resume_service
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
@@ -112,7 +118,13 @@ async def optimize(
     db: Session = Depends(get_db),
 ):
     try:
-        result = await resume_service.optimize_resume(db, user.id, payload.job_id)
+        result = await resume_service.optimize_resume(
+            db,
+            user.id,
+            job_id=payload.job_id,
+            category=payload.category,
+            subcategory=payload.subcategory,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok(result)
@@ -126,11 +138,67 @@ async def apply_optimization(
 ):
     try:
         resume = await resume_service.apply_optimization(
-            db, user.id, payload.job_id, payload.skills_to_add
+            db,
+            user.id,
+            payload.skills_to_add,
+            job_id=payload.job_id,
+            category=payload.category,
+            subcategory=payload.subcategory,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok(resume_service.resume_to_dict(resume), message="已应用优化并生成新版本")
+
+
+@router.get("/intent")
+def get_job_intent(
+    user: User = Depends(require_role("seeker")),
+    db: Session = Depends(get_db),
+):
+    resume = db.scalar(select(Resume).where(Resume.user_id == user.id))
+    return ok(resume_service.job_intent_to_dict(resume))
+
+
+@router.put("/intent")
+async def put_job_intent(
+    payload: JobIntentIn,
+    user: User = Depends(require_role("seeker")),
+    db: Session = Depends(get_db),
+):
+    try:
+        resume = await resume_service.save_job_intent(
+            db,
+            user.id,
+            target_title=payload.target_title,
+            categories=payload.categories,
+            subcategories=payload.subcategories,
+            locations=payload.locations,
+            districts=payload.districts,
+            salary_min=payload.salary_min,
+            salary_max=payload.salary_max,
+            job_types=payload.job_types,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(resume_service.job_intent_to_dict(resume), message="求职意向已更新")
+
+
+@router.post("/diagnose")
+async def diagnose(
+    payload: DiagnoseIn,
+    user: User = Depends(require_role("seeker")),
+    db: Session = Depends(get_db),
+):
+    try:
+        result = await resume_service.diagnose_job_fit(
+            db,
+            user.id,
+            category=payload.category,
+            subcategory=payload.subcategory,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(result)
 
 
 @router.put("/mine")

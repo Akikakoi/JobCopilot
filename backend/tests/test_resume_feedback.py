@@ -117,6 +117,72 @@ def test_resume_optimize_and_apply(client, monkeypatch):
     )
     assert no_change.status_code == 400
 
+    frontend_job = create_job(
+        client, employer["access_token"], title="前端开发工程师（React）", category="技术研发"
+    )
+    assert frontend_job["subcategory"] == "前端开发"
+    by_category = client.post(
+        "/api/resumes/optimize",
+        json={"category": "技术研发"},
+        headers=auth(seeker["access_token"]),
+    )
+    assert by_category.status_code == 200, by_category.text
+    assert by_category.json()["data"]["skills_to_add"] == ["Kubernetes"]
+
+    applied_by_category = client.post(
+        "/api/resumes/optimize/apply",
+        json={"category": "技术研发", "skills_to_add": ["Go"]},
+        headers=auth(seeker["access_token"]),
+    )
+    assert applied_by_category.status_code == 200, applied_by_category.text
+    labels = [
+        item["label"]
+        for item in client.get(
+            "/api/resumes/versions", headers=auth(seeker["access_token"])
+        ).json()["data"]["items"]
+    ]
+    assert "按岗优化 · 技术研发" in labels
+
+    by_subcategory = client.post(
+        "/api/resumes/optimize",
+        json={"category": "技术研发", "subcategory": "前端开发"},
+        headers=auth(seeker["access_token"]),
+    )
+    assert by_subcategory.status_code == 200, by_subcategory.text
+
+    applied_by_subcategory = client.post(
+        "/api/resumes/optimize/apply",
+        json={"category": "技术研发", "subcategory": "前端开发", "skills_to_add": ["TypeScript"]},
+        headers=auth(seeker["access_token"]),
+    )
+    assert applied_by_subcategory.status_code == 200, applied_by_subcategory.text
+    labels = [
+        item["label"]
+        for item in client.get(
+            "/api/resumes/versions", headers=auth(seeker["access_token"])
+        ).json()["data"]["items"]
+    ]
+    assert "按岗优化 · 技术研发 · 前端开发" in labels
+
+    empty_subcategory = client.post(
+        "/api/resumes/optimize",
+        json={"category": "技术研发", "subcategory": "不存在的方向"},
+        headers=auth(seeker["access_token"]),
+    )
+    assert empty_subcategory.status_code == 400
+
+    empty_category = client.post(
+        "/api/resumes/optimize",
+        json={"category": "设计"},
+        headers=auth(seeker["access_token"]),
+    )
+    assert empty_category.status_code == 400
+
+    no_target = client.post(
+        "/api/resumes/optimize", json={}, headers=auth(seeker["access_token"])
+    )
+    assert no_target.status_code == 400
+
     no_resume = register(client, "opt-seeker2", "seeker")
     missing = client.post(
         "/api/resumes/optimize",

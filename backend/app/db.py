@@ -55,3 +55,33 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _ensure_application_columns()
+    _backfill_match_explanations()
+
+
+def _backfill_match_explanations() -> None:
+    """一次性回填：把投递记录里已有的解读迁到独立缓存表，避免升级后重调 LLM。
+
+    幂等：缓存表已有该 (resume_id, job_id) 时跳过。
+    """
+    from sqlalchemy import text
+
+    inspector = inspect(engine)
+    if "match_explanations" not in inspector.get_table_names():
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT OR IGNORE INTO match_explanations
+                    (resume_id, job_id, fingerprint, match_score, explanation)
+                SELECT a.resume_id, a.job_id, '', COALESCE(a.match_score, 0),
+                       a.match_explanation
+                FROM applications a
+                WHERE a.match_explanation IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM match_explanations m
+                    WHERE m.resume_id = a.resume_id AND m.job_id = a.job_id
+                  )
+                """
+            )
+        )

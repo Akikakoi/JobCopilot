@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.job_taxonomy import derive_subcategory
 from app.llm.client import embed_texts
 from app.models import Company, Job, User
 from app.utils import cosine_similarity
@@ -22,6 +23,7 @@ def job_to_dict(job: Job) -> dict:
         "location": job.location,
         "district": job.district or "",
         "category": job.category or "",
+        "subcategory": derive_subcategory(job.category or "", job.title),
         "job_type": job.job_type or "",
         "salary_min": job.salary_min,
         "salary_max": job.salary_max,

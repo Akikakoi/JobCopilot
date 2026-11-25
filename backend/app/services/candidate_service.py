@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.matching import pipeline
 from app.matching.rules import score_resume_job
 from app.models import Application, Company, Job, Resume, User
+from app.utils import cosine_similarity
 from app.services import application_service, interview_invite_service, offer_service
 
 
@@ -15,7 +16,7 @@ def _candidate_item(db: Session, application: Application, job: Job | None) -> d
         return None
     scoring = score_resume_job(resume.structured or {}, job)
     similarity = (
-        pipeline.cosine_similarity(resume.embedding, job.embedding)
+        cosine_similarity(resume.embedding, job.embedding)
         if resume.embedding and job.embedding
         else 0.0
     )

@@ -22,6 +22,7 @@ from app.services import (
     job_service,
     onboarding_service,
     offer_service,
+    resume_service,
     subscription_service,
 )
 
@@ -162,6 +163,61 @@ async def _suggest_resume_improvements(
         "location": scoring["breakdown"]["location"],
         "salary": scoring["breakdown"]["salary"],
     }
+
+
+async def _get_my_job_intent(db: Session, user: User) -> Any:
+    resume = _my_resume(db, user)
+    intent = resume_service.job_intent_to_dict(resume)
+    if not any(
+        [intent["target_title"], intent["categories"], intent["locations"], intent["salary_min"]]
+    ):
+        return {"intent": intent, "hint": "用户还没有设置求职意向，可以询问目标职位、方向、城市与薪资后调用 update_job_intent"}
+    return {"intent": intent}
+
+
+async def _update_job_intent(
+    db: Session,
+    user: User,
+    target_title: str | None = None,
+    categories: list[str] | None = None,
+    subcategories: list[str] | None = None,
+    locations: list[str] | None = None,
+    districts: dict[str, list[str]] | None = None,
+    salary_min: float | None = None,
+    salary_max: float | None = None,
+    job_types: list[str] | None = None,
+) -> Any:
+    """更新求职意向（岗位定位）。只传需要修改的字段，其余保持原值。"""
+    current = resume_service.job_intent_to_dict(_my_resume(db, user))
+    resume = await resume_service.save_job_intent(
+        db,
+        user.id,
+        target_title=(
+            target_title if target_title is not None else current["target_title"]
+        ),
+        categories=categories if categories is not None else current["categories"],
+        subcategories=subcategories if subcategories is not None else current["subcategories"],
+        locations=locations if locations is not None else current["locations"],
+        districts=districts if districts is not None else current.get("districts") or {},
+        salary_min=salary_min if salary_min is not None else current["salary_min"],
+        salary_max=salary_max if salary_max is not None else current["salary_max"],
+        job_types=job_types if job_types is not None else current["job_types"],
+    )
+    return {"saved": True, "intent": resume_service.job_intent_to_dict(resume)}
+
+
+async def _diagnose_job_fit(
+    db: Session,
+    user: User,
+    category: str | None = None,
+    subcategory: str | None = None,
+) -> Any:
+    try:
+        return await resume_service.diagnose_job_fit(
+            db, user.id, category=category, subcategory=subcategory
+        )
+    except ValueError as exc:
+        return {"error": str(exc)}
 
 
 async def _apply_to_job(
@@ -468,7 +524,7 @@ async def _screen_candidate(db: Session, user: User, application_id: int) -> Any
         return {"error": "候选人简历缺失"}
 
     scoring = score_resume_job(resume.structured or {}, job)
-    explanation = application.match_explanation or await pipeline.explain_match(resume, job, scoring)
+    explanation = await pipeline.get_cached_explanation(db, resume, job, scoring)
     application.match_score = scoring["total"]
     application.match_explanation = explanation
     db.commit()
@@ -743,7 +799,6 @@ async def _create_interview_invite(
     mode: str = "video",
     location: str = "",
     note: str = "",
-    round: int | None = None,
 ) -> Any:
     try:
         scheduled = _parse_tool_datetime(scheduled_at)
@@ -757,7 +812,6 @@ async def _create_interview_invite(
                 "mode": mode,
                 "location": location,
                 "note": note,
-                "round": round,
             },
         )
     except (ValueError, PermissionError) as exc:
@@ -863,6 +917,52 @@ SEEKER_TOOLS: list[Tool] = [
         "针对目标岗位给出简历差距数据（缺失技能、年限、地点、薪资）",
         obj({"job_id": {"type": "integer", "description": "目标岗位 id，缺省则用最佳匹配岗位"}}),
         _suggest_resume_improvements,
+    ),
+    Tool(
+        "get_my_job_intent",
+        "读取当前用户的求职意向（目标职位、方向、城市、薪资）",
+        obj(),
+        _get_my_job_intent,
+    ),
+    Tool(
+        "update_job_intent",
+        "更新求职意向（岗位定位），保存后会影响岗位推荐与匹配排序。只传需要修改的字段",
+        obj(
+            {
+                "target_title": {"type": "string", "description": "目标职位，如 后端开发工程师"},
+                "categories": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "岗位类别，可选：技术研发/产品与项目/设计/运营/市场与销售/职能支持/生活服务",
+                },
+                "subcategories": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "二级方向，如 后端开发、算法与人工智能",
+                },
+                "locations": {"type": "array", "items": {"type": "string"}, "description": "期望城市"},
+                "districts": {
+                    "type": "object",
+                    "description": "期望区域，城市到区的映射，如 {\"上海\": [\"徐汇区\", \"闵行区\"]}",
+                    "additionalProperties": {"type": "array", "items": {"type": "string"}},
+                },
+                "salary_min": {"type": "number", "description": "期望最低月薪（K）"},
+                "salary_max": {"type": "number", "description": "期望最高月薪（K）"},
+                "job_types": {"type": "array", "items": {"type": "string"}, "description": "全职/实习"},
+            }
+        ),
+        _update_job_intent,
+    ),
+    Tool(
+        "diagnose_job_fit",
+        "岗位定位诊断：基于简历判断适合哪些岗位方向、匹配度、差距与下一步建议",
+        obj(
+            {
+                "category": {"type": "string", "description": "重点关注的技术类别，可选"},
+                "subcategory": {"type": "string", "description": "重点关注的二级方向，可选"},
+            }
+        ),
+        _diagnose_job_fit,
     ),
     Tool(
         "apply_to_job",
@@ -1099,7 +1199,6 @@ EMPLOYER_TOOLS: list[Tool] = [
                 "mode": {"type": "string", "enum": ["video", "onsite", "phone"]},
                 "location": {"type": "string", "description": "会议链接或现场地址"},
                 "note": {"type": "string", "description": "面试官、准备材料等说明"},
-                "round": {"type": "integer", "description": "轮次，不填自动取下一轮"},
             },
             ["application_id", "scheduled_at"],
         ),
