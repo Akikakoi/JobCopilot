@@ -8,6 +8,7 @@ from app.models import (
     ApplicationEvent,
     Job,
     Notification,
+    Offer,
     Resume,
     ResumeFile,
     User,
@@ -27,7 +28,8 @@ VALID_STATUSES = {
 }
 # 招聘方拖拽只推进招聘阶段；入职阶段由候选人与招聘方的入职动作驱动
 STAGE_ORDER = ["submitted", "screening", "interview", "offer"]
-TERMINAL_STATUSES = {"offer", "rejected", "onboarding", "hired", "abandoned"}
+# offer 由 offer_service 驱动，允许从 offer 收尾为 rejected，但不能经通用接口跳入
+TERMINAL_STATUSES = {"rejected", "onboarding", "hired", "abandoned"}
 
 
 def _transition_allowed(current: str, target: str) -> bool:
@@ -301,6 +303,8 @@ def update_status(
     job = db.get(Job, application.job_id)
     if job is None or job.company is None or job.company.owner_user_id != user.id:
         raise PermissionError("仅该岗位所属公司的招聘方可以推进状态")
+    if status == "offer" and application.status != "offer":
+        raise ValueError("请通过「发起 Offer」进入 Offer 阶段")
     if not _transition_allowed(application.status, status):
         raise ValueError(f"不允许的状态流转：{application.status} → {status}")
 
@@ -315,6 +319,12 @@ def update_status(
     application.status = status
     if note:
         application.status_note = note
+    if previous == "offer" and status == "rejected":
+        offer = db.scalar(
+            select(Offer).where(Offer.application_id == application.id)
+        )
+        if offer is not None and offer.status == "pending":
+            offer.status = "withdrawn"
     db.add(
         ApplicationEvent(
             application_id=application.id,

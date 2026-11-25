@@ -13,6 +13,7 @@ from app.models import (
     User,
 )
 from app.services.notification_service import notify_once
+from app.utils import to_utc_naive, utcnow
 
 STATUS_LABELS = {
     "pending": "待候选人确认",
@@ -29,15 +30,10 @@ class InterviewInviteError(ValueError):
     pass
 
 
-def _localnow() -> datetime:
-    """面试时间由用户按本地时间填写（naive），比较时也用服务器本地时间。"""
-    return datetime.now()
-
-
 def _validate_schedule(
     invites: list[InterviewInvite], scheduled_at: datetime, duration: int
 ) -> None:
-    if scheduled_at < _localnow() - timedelta(minutes=1):
+    if scheduled_at < utcnow() - timedelta(minutes=1):
         raise InterviewInviteError("面试时间必须晚于当前时间")
     new_end = scheduled_at + timedelta(minutes=duration)
     for item in invites:
@@ -120,7 +116,7 @@ def create_invite(
     mode = data.get("mode") or "video"
     if mode not in MODE_LABELS:
         raise InterviewInviteError("面试方式不合法")
-    scheduled_at = data["scheduled_at"]
+    scheduled_at = to_utc_naive(data["scheduled_at"])
     _validate_schedule(invites, scheduled_at, duration)
 
     next_round = max((item.round for item in invites), default=0) + 1
@@ -129,7 +125,7 @@ def create_invite(
         job_id=job.id,
         user_id=application.user_id,
         created_by_user_id=user.id,
-        round=int(data.get("round") or next_round),
+        round=next_round,
         scheduled_at=scheduled_at,
         duration_minutes=duration,
         mode=mode,
@@ -203,6 +199,8 @@ def respond_invite(
     invite = _get_invite(db, user, application_id, invite_id)
     if invite.user_id != user.id:
         raise PermissionError("只有候选人可以响应邀约")
+    if invite.status == "completed":
+        raise InterviewInviteError("面试已完成，无法再响应")
     if invite.status in ("declined", "cancelled"):
         raise InterviewInviteError("该邀约已结束，请等待招聘方重新安排")
     if invite.status == "confirmed" and action == "confirm":
@@ -275,6 +273,8 @@ def cancel_invite(
 ) -> InterviewInvite:
     invite = _get_invite(db, user, application_id, invite_id)
     application, job = _application_for_employer(db, user, application_id)
+    if invite.status == "completed":
+        raise InterviewInviteError("面试已完成，无法取消")
     if invite.status in ("declined", "cancelled"):
         raise InterviewInviteError("该邀约已结束，无需取消")
 

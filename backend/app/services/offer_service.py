@@ -1,19 +1,18 @@
 """Offer：招聘方发出、候选人接受/拒绝，并同步投递状态与站内通知。"""
 
-from datetime import datetime
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Application, ApplicationEvent, Job, Offer, User
 from app.services.notification_service import notify_once
-from app.utils import utcnow
+from app.utils import to_utc_naive, utcnow
 
 STATUS_LABELS = {
     "pending": "待候选人确认",
     "accepted": "已接受",
     "declined": "已拒绝",
     "expired": "已过期",
+    "withdrawn": "已撤回",
 }
 
 
@@ -21,16 +20,11 @@ class OfferError(ValueError):
     pass
 
 
-def _localnow() -> datetime:
-    """Offer 有效期由招聘方按本地时间填写，过期判断同样使用本地时间。"""
-    return datetime.now()
-
-
 def _effective_status(offer: Offer) -> str:
     if (
         offer.status == "pending"
         and offer.expires_at is not None
-        and offer.expires_at < _localnow()
+        and offer.expires_at < utcnow()
     ):
         return "expired"
     return offer.status
@@ -93,7 +87,7 @@ def create_offer(db: Session, user: User, application_id: int, data: dict) -> Of
     offer = get_offer(db, application_id)
     created = offer is None
     if offer is not None and offer.status != "pending":
-        raise OfferError("候选人已响应 Offer，无法修改；如需重新沟通请先更新投递状态")
+        raise OfferError("Offer 已结束（已响应/已撤回/已过期），无法修改；如需重新沟通请先更新投递状态")
 
     if offer is None:
         offer = Offer(
@@ -107,7 +101,7 @@ def create_offer(db: Session, user: User, application_id: int, data: dict) -> Of
     offer.salary_min = float(data.get("salary_min") or 0)
     offer.salary_max = float(data.get("salary_max") or 0)
     offer.start_date = (data.get("start_date") or "").strip()
-    offer.expires_at = data.get("expires_at")
+    offer.expires_at = to_utc_naive(data.get("expires_at"))
     offer.note = (data.get("note") or "").strip()
     offer.status = "pending"
 
@@ -161,7 +155,7 @@ def respond_offer(
         raise OfferError("Offer 已过期")
     if offer.status != "pending":
         raise OfferError("Offer 已响应，请勿重复操作")
-    if offer.expires_at is not None and offer.expires_at < _localnow():
+    if offer.expires_at is not None and offer.expires_at < utcnow():
         offer.status = "expired"
         db.commit()
         raise OfferError("Offer 已过期，请联系招聘方重新发起")

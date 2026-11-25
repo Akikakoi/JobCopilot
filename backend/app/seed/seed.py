@@ -29,6 +29,7 @@ from app.models import (
 from app.security import hash_password
 from app.services.job_service import job_embedding_text
 from app.services.resume_service import build_resume_embedding_text
+from app.utils import utcnow
 
 ROOT = BASE_DIR.parent
 JOBS_DIR = ROOT / "seed_data" / "jobs"
@@ -205,7 +206,7 @@ def _seed_pipeline(
     now: datetime | None = None,
 ) -> tuple[int, int]:
     """为投递预置面试邀约与 Offer，返回 (邀约数, Offer 数)。"""
-    now = now or datetime.now()
+    now = now or utcnow()
     invite_count = 0
     offer_count = 0
 

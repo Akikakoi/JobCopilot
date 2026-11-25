@@ -10,6 +10,13 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def to_utc_naive(value: datetime | None) -> datetime | None:
+    """带时区的时间转为 UTC naive；已经是 naive 的值按 UTC 理解，原样返回。"""
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def cosine_similarity(a: list[float], b: list[float]) -> float:
     va, vb = np.asarray(a, dtype=np.float32), np.asarray(b, dtype=np.float32)
     denom = float(np.linalg.norm(va) * np.linalg.norm(vb))

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, fetchBlob } from "../lib/api";
+import { api, ApiError, fetchBlob } from "../lib/api";
 import type { Candidate, Job } from "../lib/types";
 import { DownloadIcon } from "../components/icons";
 import { Badge, Button, EmptyState, Modal, ProgressBar, ScoreRing, Select, Skeleton, STATUS_META, Textarea, cn } from "../components/ui";
@@ -20,8 +20,17 @@ const COLUMNS: Array<{ key: string; label: string; accent: string }> = [
   { key: "rejected", label: "未通过", accent: "bg-danger" },
 ];
 
-// 入职阶段由双端入职动作驱动，看板不允许拖拽改状态
-const DROPPABLE_STATUSES = new Set(["submitted", "screening", "interview", "offer", "rejected"]);
+// 入职阶段由双端入职动作驱动；Offer 由「发起 Offer」驱动，看板只允许从 offer 收尾为未通过
+const GENERIC_STAGE_ORDER = ["submitted", "screening", "interview"];
+const DRAGGABLE_STATUSES = new Set(["submitted", "screening", "interview", "offer"]);
+const DROP_TARGET_STATUSES = new Set(["screening", "interview", "rejected"]);
+
+function statusTargets(current: string): string[] {
+  if (current === "offer") return ["rejected"];
+  const index = GENERIC_STAGE_ORDER.indexOf(current);
+  if (index === -1) return [];
+  return [...GENERIC_STAGE_ORDER.slice(index + 1), "rejected"];
+}
 
 interface JobWithCount extends Job {
   applicant_count: number;
@@ -54,9 +63,9 @@ function CandidateCard({
 
   return (
     <div
-      draggable={DROPPABLE_STATUSES.has(candidate.status)}
+      draggable={DRAGGABLE_STATUSES.has(candidate.status)}
       onDragStart={(event) => {
-        if (!DROPPABLE_STATUSES.has(candidate.status)) return;
+        if (!DRAGGABLE_STATUSES.has(candidate.status)) return;
         event.dataTransfer.setData("text/plain", String(candidate.application_id));
         event.dataTransfer.effectAllowed = "move";
         onDragStart();
@@ -135,6 +144,7 @@ export function EmployerBoardPage() {
   const [interviewCandidate, setInterviewCandidate] = useState<Candidate | null>(null);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [downloadError, setDownloadError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
 
   const jobsQuery = useQuery({
@@ -168,6 +178,21 @@ export function EmployerBoardPage() {
     [jobsQuery.data, jobId],
   );
 
+  const draggingCandidate = useMemo(
+    () =>
+      draggingId
+        ? candidatesQuery.data?.items.find(
+            (item) => item.application_id === draggingId,
+          ) || null
+        : null,
+    [candidatesQuery.data, draggingId],
+  );
+
+  const canDropInto = (status: string) =>
+    Boolean(
+      draggingCandidate && statusTargets(draggingCandidate.status).includes(status),
+    );
+
   // 面试邀约 / Offer 变更后，用最新候选人数据刷新详情弹窗
   useEffect(() => {
     if (!selected) return;
@@ -188,6 +213,7 @@ export function EmployerBoardPage() {
       note?: string;
     }) => api.patch(`/applications/${applicationId}/status`, { status, note }),
     onMutate: async ({ applicationId, status, note }) => {
+      setActionError("");
       await queryClient.cancelQueries({ queryKey: ["candidates", candidateScope] });
       const previous = queryClient.getQueryData<{ items: Candidate[] }>(["candidates", candidateScope]);
       queryClient.setQueryData<{ items: Candidate[] }>(["candidates", candidateScope], (old) =>
@@ -203,11 +229,17 @@ export function EmployerBoardPage() {
       );
       return { previous };
     },
-    onError: (_err, _vars, context) => {
+    onError: (err, vars, context) => {
       if (context?.previous) {
         queryClient.setQueryData(["candidates", candidateScope], context.previous);
+        const restored = context.previous.items.find(
+          (item) => item.application_id === vars.applicationId,
+        );
+        if (restored) setSelected(restored);
       }
+      setActionError(err instanceof ApiError ? err.message : "状态更新失败，请重试");
     },
+    onSuccess: () => setActionError(""),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["candidates", candidateScope] });
       queryClient.invalidateQueries({ queryKey: ["my-jobs"] });
@@ -241,6 +273,7 @@ export function EmployerBoardPage() {
     if (!applicationId) return;
     const candidate = candidatesQuery.data?.items.find((item) => item.application_id === applicationId);
     if (!candidate || candidate.status === status) return;
+    if (!statusTargets(candidate.status).includes(status)) return;
     patchMutation.mutate({ applicationId, status });
   };
 
@@ -274,6 +307,12 @@ export function EmployerBoardPage() {
           ]}
         />
       </header>
+
+      {actionError && (
+        <p className="mt-3 rounded-lg border border-danger bg-danger-soft px-3 py-2 text-[11px] text-danger">
+          {actionError}
+        </p>
+      )}
 
       {(currentJob || allJobs) && (
         <div className="mt-3 flex flex-wrap items-center gap-3 px-1 text-xs text-muted animate-fade-in">
@@ -312,13 +351,13 @@ export function EmployerBoardPage() {
             <section
               key={column.key}
               onDragOver={(event) => {
-                if (!DROPPABLE_STATUSES.has(column.key)) return;
+                if (!canDropInto(column.key)) return;
                 event.preventDefault();
                 setDropTarget(column.key);
               }}
               onDragLeave={() => setDropTarget((prev) => (prev === column.key ? null : prev))}
               onDrop={(event) => {
-                if (!DROPPABLE_STATUSES.has(column.key)) return;
+                if (!DROP_TARGET_STATUSES.has(column.key)) return;
                 handleDrop(column.key, event);
               }}
               className={cn(
@@ -348,7 +387,7 @@ export function EmployerBoardPage() {
                 ))}
                 {!(grouped[column.key] || []).length && (
                   <div className="rounded-lg border border-dashed border-line py-8 text-center text-[10px] text-muted">
-                    {DROPPABLE_STATUSES.has(column.key) ? "拖到这里" : "暂无候选人"}
+                    {DROP_TARGET_STATUSES.has(column.key) ? "拖到这里" : "暂无候选人"}
                   </div>
                 )}
               </div>
@@ -369,21 +408,25 @@ export function EmployerBoardPage() {
         footer={
           selected ? (
             <div className="flex w-full flex-wrap items-center justify-between gap-2">
-              {DROPPABLE_STATUSES.has(selected.status) ? (
+              {DRAGGABLE_STATUSES.has(selected.status) ? (
                 <Select
                   className="w-[160px]"
                   ariaLabel="候选人状态"
                   value={selected.status}
                   onChange={(status) => {
+                    if (status === selected.status) return;
                     patchMutation.mutate({
                       applicationId: selected.application_id,
                       status,
                     });
                     setSelected({ ...selected, status });
                   }}
-                  options={COLUMNS.filter((column) =>
-                    DROPPABLE_STATUSES.has(column.key),
-                  ).map((column) => ({ label: column.label, value: column.key }))}
+                  options={[selected.status, ...statusTargets(selected.status)].map(
+                    (key) => ({
+                      label: STATUS_META[key]?.label || key,
+                      value: key,
+                    }),
+                  )}
                 />
               ) : (
                 <Badge tone={STATUS_META[selected.status]?.tone || "default"}>

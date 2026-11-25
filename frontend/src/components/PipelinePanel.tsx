@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "../lib/api";
 import type { Application, Candidate, InterviewInvite, Offer } from "../lib/types";
-import { formatShortDateTime } from "../lib/format";
+import { formatShortDateTime, localInputToUtcIso, toLocalDateInput } from "../lib/format";
 import {
   Badge,
   Button,
@@ -392,7 +392,7 @@ export function EmployerPipeline({
   const inviteMutation = useMutation({
     mutationFn: () =>
       api.post(`/applications/${candidate.application_id}/interview-invites`, {
-        scheduled_at: inviteForm.scheduled_at,
+        scheduled_at: localInputToUtcIso(inviteForm.scheduled_at),
         duration_minutes: Number(inviteForm.duration_minutes) || 45,
         mode: inviteForm.mode,
         location: inviteForm.location.trim(),
@@ -441,7 +441,9 @@ export function EmployerPipeline({
         salary_min: Number(offerForm.salary_min) || 0,
         salary_max: Number(offerForm.salary_max) || 0,
         start_date: offerForm.start_date,
-        expires_at: offerForm.expires_date ? `${offerForm.expires_date}T23:59:59` : null,
+        expires_at: offerForm.expires_date
+          ? localInputToUtcIso(`${offerForm.expires_date}T23:59:59`)
+          : null,
         note: offerForm.note.trim(),
       }),
     onSuccess: () => {
@@ -492,7 +494,7 @@ export function EmployerPipeline({
             salary_min: String(current.salary_min),
             salary_max: String(current.salary_max),
             start_date: current.start_date || "",
-            expires_date: current.expires_at ? current.expires_at.slice(0, 10) : "",
+            expires_date: toLocalDateInput(current.expires_at),
             note: current.note || "",
           }
         : { salary_min: "", salary_max: "", start_date: "", expires_date: "", note: "" },

@@ -10,7 +10,6 @@ class InterviewInviteIn(BaseModel):
     mode: Literal["onsite", "video", "phone"] = "video"
     location: str = Field(default="", max_length=255)
     note: str = Field(default="", max_length=2000)
-    round: int | None = Field(default=None, ge=1, le=10)
 
 
 class InterviewInviteRespondIn(BaseModel):

@@ -439,6 +439,111 @@ def test_onboarding_requires_accepted_offer(client):
     assert "入职" in again.json()["message"]
 
 
+def test_offer_cannot_skip_creation_and_is_withdrawn_on_rejection(client):
+    seeker, employer, _, application = setup_application(client, "-10")
+
+    direct = client.patch(
+        f"/api/applications/{application['id']}/status",
+        json={"status": "offer"},
+        headers=auth(employer["access_token"]),
+    )
+    assert direct.status_code == 400
+    assert "发起 Offer" in direct.json()["message"]
+
+    created = client.post(
+        f"/api/applications/{application['id']}/offer",
+        json={"salary_min": 20, "salary_max": 24, "start_date": "2030-05-01"},
+        headers=auth(employer["access_token"]),
+    )
+    assert created.status_code == 200, created.text
+
+    ended = client.patch(
+        f"/api/applications/{application['id']}/status",
+        json={"status": "rejected", "note": "岗位编制冻结"},
+        headers=auth(employer["access_token"]),
+    )
+    assert ended.status_code == 200, ended.text
+    assert ended.json()["data"]["status"] == "rejected"
+
+    offer = client.get(
+        f"/api/applications/{application['id']}/offer",
+        headers=auth(employer["access_token"]),
+    ).json()["data"]
+    assert offer["status"] == "withdrawn"
+    assert offer["status_label"] == "已撤回"
+
+
+def test_interview_invite_round_is_server_side_and_completed_is_final(client):
+    seeker, employer, _, application = setup_application(client, "-11")
+
+    first = client.post(
+        f"/api/applications/{application['id']}/interview-invites",
+        json={"scheduled_at": "2030-01-01T10:00:00", "round": 9},
+        headers=auth(employer["access_token"]),
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["data"]["round"] == 1
+
+    client.post(
+        f"/api/applications/{application['id']}/interview-invites/{first.json()['data']['id']}/respond",
+        json={"action": "confirm"},
+        headers=auth(seeker["access_token"]),
+    )
+    completed = client.post(
+        f"/api/applications/{application['id']}/interview-invites/{first.json()['data']['id']}/complete",
+        json={},
+        headers=auth(employer["access_token"]),
+    )
+    assert completed.status_code == 200
+
+    late_cancel = client.post(
+        f"/api/applications/{application['id']}/interview-invites/{first.json()['data']['id']}/cancel",
+        json={},
+        headers=auth(employer["access_token"]),
+    )
+    assert late_cancel.status_code == 400
+    assert "已完成" in late_cancel.json()["message"]
+
+    late_respond = client.post(
+        f"/api/applications/{application['id']}/interview-invites/{first.json()['data']['id']}/respond",
+        json={"action": "decline"},
+        headers=auth(seeker["access_token"]),
+    )
+    assert late_respond.status_code == 400
+
+
+def test_timezone_aware_inputs_are_stored_as_utc(client):
+    seeker, employer, _, application = setup_application(client, "-12")
+
+    offer = client.post(
+        f"/api/applications/{application['id']}/offer",
+        json={
+            "salary_min": 20,
+            "salary_max": 24,
+            "expires_at": "2030-01-10T23:59:59+08:00",
+        },
+        headers=auth(employer["access_token"]),
+    )
+    assert offer.status_code == 200, offer.text
+    assert offer.json()["data"]["expires_at"].startswith("2030-01-10T15:59:59")
+
+    invite = client.post(
+        f"/api/applications/{application['id']}/interview-invites",
+        json={"scheduled_at": "2030-01-01T10:00:00+08:00"},
+        headers=auth(employer["access_token"]),
+    )
+    assert invite.status_code == 400  # 已进入 Offer 阶段，不能再安排面试
+
+    other_seeker, other_employer, _, other_application = setup_application(client, "-13")
+    invite = client.post(
+        f"/api/applications/{other_application['id']}/interview-invites",
+        json={"scheduled_at": "2030-01-01T10:00:00+08:00"},
+        headers=auth(other_employer["access_token"]),
+    )
+    assert invite.status_code == 200, invite.text
+    assert invite.json()["data"]["scheduled_at"].startswith("2030-01-01T02:00:00")
+
+
 def test_new_application_notifies_employer(client):
     _, employer, _, application = setup_application(client, "-6")
 
