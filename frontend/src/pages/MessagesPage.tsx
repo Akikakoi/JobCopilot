@@ -6,13 +6,28 @@ import type { ChatMessage, ConversationSummary } from "../lib/types";
 import { formatShortDateTime } from "../lib/format";
 import { Button, Card, EmptyState, Skeleton, Textarea, cn } from "../components/ui";
 
+function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
+  if (incoming.length === 0) return current;
+  const byId = new Map<number, ChatMessage>();
+  for (const item of current) byId.set(item.id, item);
+  for (const item of incoming) byId.set(item.id, item);
+  return [...byId.values()].sort((a, b) => a.id - b.id);
+}
+
 export function MessagesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loadedOlder, setLoadedOlder] = useState(false);
+  const [olderHasMore, setOlderHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const restoreScrollRef = useRef<{ height: number; top: number } | null>(null);
+  const lastScrollKeyRef = useRef<string | null>(null);
 
   const listQuery = useQuery({
     queryKey: ["conversations"],
@@ -37,14 +52,51 @@ export function MessagesPage() {
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
     queryFn: () =>
-      api.get<{ items: ChatMessage[] }>(
-        `/conversations/${selectedId}/messages?limit=200`,
+      api.get<{ items: ChatMessage[]; has_more: boolean }>(
+        `/conversations/${selectedId}/messages?limit=100`,
       ),
     enabled: Boolean(selectedId),
     refetchInterval: 5_000,
   });
 
-  const messages = messagesQuery.data?.items || [];
+  useEffect(() => {
+    setMessages([]);
+    setLoadedOlder(false);
+    setOlderHasMore(false);
+    setOlderError("");
+    lastScrollKeyRef.current = null;
+  }, [selectedId]);
+
+  useEffect(() => {
+    const latest = messagesQuery.data?.items;
+    if (latest) setMessages((prev) => mergeMessages(prev, latest));
+  }, [messagesQuery.data]);
+
+  const hasOlder = loadedOlder ? olderHasMore : Boolean(messagesQuery.data?.has_more);
+  const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
+
+  const loadOlder = async () => {
+    if (!selectedId || messages.length === 0 || loadingOlder) return;
+    const node = scrollRef.current;
+    const snapshot = node
+      ? { height: node.scrollHeight, top: node.scrollTop }
+      : null;
+    setLoadingOlder(true);
+    setOlderError("");
+    try {
+      const data = await api.get<{ items: ChatMessage[]; has_more: boolean }>(
+        `/conversations/${selectedId}/messages?limit=100&before_id=${messages[0].id}`,
+      );
+      if (snapshot) restoreScrollRef.current = snapshot;
+      setMessages((prev) => mergeMessages(prev, data.items));
+      setLoadedOlder(true);
+      setOlderHasMore(data.has_more);
+    } catch (err) {
+      setOlderError(err instanceof ApiError ? err.message : "加载更早消息失败");
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
 
   const readMutation = useMutation({
     mutationFn: (id: number) => api.post(`/conversations/${id}/read`),
@@ -64,8 +116,21 @@ export function MessagesPage() {
 
   useEffect(() => {
     const node = scrollRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }, [messages.length, selectedId]);
+    if (node && restoreScrollRef.current) {
+      const { height, top } = restoreScrollRef.current;
+      restoreScrollRef.current = null;
+      node.scrollTop = node.scrollHeight - height + top;
+    }
+  }, [messages]);
+
+  // 切换会话或最后一条消息变化时滚到底部；向前翻页不打断阅读位置
+  useEffect(() => {
+    const key = `${selectedId}:${lastMessageId}`;
+    if (lastScrollKeyRef.current === key) return;
+    lastScrollKeyRef.current = key;
+    const node = scrollRef.current;
+    if (node && lastMessageId !== null) node.scrollTop = node.scrollHeight;
+  }, [selectedId, lastMessageId]);
 
   const sendMutation = useMutation({
     mutationFn: () =>
@@ -193,6 +258,27 @@ export function MessagesPage() {
                     <p className="py-10 text-center text-[11px] text-muted">
                       还没有消息，发送第一条消息开始沟通。
                     </p>
+                  )}
+                  {olderError && (
+                    <p className="rounded-lg border border-danger bg-danger-soft px-3 py-2 text-[11px] text-danger">
+                      {olderError}
+                    </p>
+                  )}
+                  {messages.length > 0 && (
+                    <div className="flex justify-center pb-1">
+                      {hasOlder ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          loading={loadingOlder}
+                          onClick={() => void loadOlder()}
+                        >
+                          加载更早消息
+                        </Button>
+                      ) : (
+                        <span className="text-[10px] text-muted">已经是最早的消息</span>
+                      )}
+                    </div>
                   )}
                   {messages.map((message) => (
                     <div

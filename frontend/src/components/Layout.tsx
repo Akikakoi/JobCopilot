@@ -240,7 +240,10 @@ export function Layout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="hidden items-center justify-between border-b border-line bg-surface px-6 py-2.5 md:flex">
           <p className="text-[13px] font-semibold">{user.company_name || "招聘工作台"}</p>
-          <p className="text-xs tabular-nums text-muted">{todayLabel()}</p>
+          <div className="flex items-center gap-3">
+            <p className="text-xs tabular-nums text-muted">{todayLabel()}</p>
+            <NotificationBell align="right" />
+          </div>
         </header>
 
         <header className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 md:hidden">
@@ -270,6 +273,7 @@ export function Layout() {
                 )}
               </NavLink>
             ))}
+            <NotificationBell align="right" />
             <button onClick={signOut} className="p-1 text-muted" title="退出登录">
               <LogoutIcon className="h-4 w-4" />
             </button>

@@ -189,14 +189,35 @@ def list_messages(
     user: User,
     conversation_id: int,
     after_id: int | None = None,
+    before_id: int | None = None,
     limit: int = 100,
-) -> list[dict]:
+) -> tuple[list[dict], bool]:
+    """默认返回最新 limit 条；before_id 用于向前翻页，after_id 用于增量拉取。"""
     _get_conversation(db, user, conversation_id)
-    stmt = select(Message).where(Message.conversation_id == conversation_id)
+    if after_id and before_id:
+        raise MessageError("after_id 与 before_id 不能同时使用")
+    size = min(limit, 200)
+
     if after_id:
-        stmt = stmt.where(Message.id > after_id)
-    rows = list(db.scalars(stmt.order_by(Message.id.asc()).limit(min(limit, 200))))
-    return [message_to_dict(item, user) for item in rows]
+        rows = list(
+            db.scalars(
+                select(Message)
+                .where(Message.conversation_id == conversation_id, Message.id > after_id)
+                .order_by(Message.id.asc())
+                .limit(size)
+            )
+        )
+        return [message_to_dict(item, user) for item in rows], False
+
+    stmt = select(Message).where(Message.conversation_id == conversation_id)
+    if before_id:
+        stmt = stmt.where(Message.id < before_id)
+    rows = list(
+        db.scalars(stmt.order_by(Message.id.desc()).limit(size + 1))
+    )
+    has_more = len(rows) > size
+    rows = list(reversed(rows[:size]))
+    return [message_to_dict(item, user) for item in rows], has_more
 
 
 def send_message(

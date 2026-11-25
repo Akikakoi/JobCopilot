@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { CheckIcon, ChevronIcon, CloseIcon } from "./icons";
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -400,6 +401,16 @@ export function Modal({
   width?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // 部分浏览器会因 iframe/表单控件聚焦把弹窗内容滚到下方，打开时统一归零
+  useLayoutEffect(() => {
+    if (!open) return;
+    if (bodyRef.current) {
+      bodyRef.current.scrollTop = 0;
+      bodyRef.current.scrollLeft = 0;
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -440,7 +451,7 @@ export function Modal({
             <CloseIcon className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[65vh] overflow-y-auto px-6 py-5">{children}</div>
+        <div ref={bodyRef} className="max-h-[65vh] overflow-y-auto px-6 py-5">{children}</div>
         {footer && (
           <div className="flex justify-end gap-2 border-t border-line px-6 py-4">{footer}</div>
         )}

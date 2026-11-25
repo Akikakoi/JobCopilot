@@ -133,6 +133,52 @@ def test_conversation_permissions_and_validation(client):
     assert too_long.status_code == 422
 
 
+def test_message_pagination(client):
+    seeker, employer, _ = setup_application(client)
+    conversation_id = client.get(
+        "/api/conversations", headers=auth(seeker["access_token"])
+    ).json()["data"]["items"][0]["id"]
+
+    ids = []
+    for index in range(12):
+        sent = client.post(
+            f"/api/conversations/{conversation_id}/messages",
+            json={"content": f"消息 {index}"},
+            headers=auth(seeker["access_token"]),
+        )
+        assert sent.status_code == 200, sent.text
+        ids.append(sent.json()["data"]["id"])
+
+    latest = client.get(
+        f"/api/conversations/{conversation_id}/messages?limit=5",
+        headers=auth(seeker["access_token"]),
+    ).json()["data"]
+    assert [item["id"] for item in latest["items"]] == ids[-5:]
+    assert latest["has_more"] is True
+
+    older = client.get(
+        f"/api/conversations/{conversation_id}/messages"
+        f"?limit=5&before_id={latest['items'][0]['id']}",
+        headers=auth(seeker["access_token"]),
+    ).json()["data"]
+    assert [item["id"] for item in older["items"]] == ids[2:7]
+    assert older["has_more"] is True
+
+    oldest = client.get(
+        f"/api/conversations/{conversation_id}/messages"
+        f"?before_id={older['items'][0]['id']}",
+        headers=auth(seeker["access_token"]),
+    ).json()["data"]
+    assert [item["id"] for item in oldest["items"]] == ids[:2]
+    assert oldest["has_more"] is False
+
+    conflict = client.get(
+        f"/api/conversations/{conversation_id}/messages?after_id=1&before_id=2",
+        headers=auth(seeker["access_token"]),
+    )
+    assert conflict.status_code == 400
+
+
 def test_legacy_application_conversation_is_created_lazily(client):
     seeker, employer, application = setup_application(client)
 

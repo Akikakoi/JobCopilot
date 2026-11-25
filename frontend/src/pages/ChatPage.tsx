@@ -97,6 +97,8 @@ export function ChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const sendLockRef = useRef(false);
+  const creatingRef = useRef<Promise<number> | null>(null);
+  const runRef = useRef(0);
   const role = user?.role || "seeker";
 
   const sessionsQuery = useQuery({
@@ -138,22 +140,34 @@ export function ChatPage() {
     [sessions, sessionId],
   );
 
-  const createSession = async (): Promise<number> => {
-    const session = await api.post<AgentSession>("/agent/sessions", {});
-    appliedSessionRef.current = session.id;
-    setSessionId(session.id);
-    setMessages([]);
-    queryClient.invalidateQueries({ queryKey: ["agent-sessions"] });
-    return session.id;
+  const createSession = (): Promise<number> => {
+    // 复用进行中的创建请求，避免连点/发送撞出两个空会话
+    if (creatingRef.current) return creatingRef.current;
+    const promise = api.post<AgentSession>("/agent/sessions", {}).then((session) => {
+      appliedSessionRef.current = session.id;
+      setSessionId(session.id);
+      setMessages([]);
+      queryClient.invalidateQueries({ queryKey: ["agent-sessions"] });
+      return session.id;
+    });
+    creatingRef.current = promise;
+    const clear = () => {
+      if (creatingRef.current === promise) creatingRef.current = null;
+    };
+    void promise.then(clear, clear);
+    return promise;
   };
 
   const startNewSession = () => {
     // 新建会话时中止仍在进行的流，避免两条流同时写入不同会话
+    runRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
     sendLockRef.current = false;
     setStreaming(false);
-    void createSession();
+    void createSession().catch((err) => {
+      setError(err instanceof ApiError ? err.message : "创建会话失败");
+    });
   };
 
   const send = async (raw?: string) => {
@@ -165,7 +179,11 @@ export function ChatPage() {
 
     let activeSession = sessionId;
     try {
-      if (!activeSession) activeSession = await createSession();
+      if (creatingRef.current) {
+        activeSession = await creatingRef.current;
+      } else if (!activeSession) {
+        activeSession = await createSession();
+      }
     } catch (err) {
       sendLockRef.current = false;
       setError(err instanceof ApiError ? err.message : "创建会话失败");
@@ -173,6 +191,7 @@ export function ChatPage() {
       return;
     }
 
+    const runId = ++runRef.current;
     const userKey = `local-${Date.now()}`;
     const assistantKey = `${userKey}-a`;
     setMessages((prev) => [
@@ -238,9 +257,11 @@ export function ChatPage() {
       patchAssistant((message) => ({ ...message, streaming: false }));
     } finally {
       patchAssistant((message) => ({ ...message, streaming: false }));
-      sendLockRef.current = false;
-      setStreaming(false);
-      abortRef.current = null;
+      if (runRef.current === runId) {
+        sendLockRef.current = false;
+        setStreaming(false);
+        abortRef.current = null;
+      }
     }
   };
 
@@ -273,7 +294,8 @@ export function ChatPage() {
             <button
               key={session.id}
               onClick={() => {
-                if (streaming) return;
+                if (streaming || session.id === sessionId) return;
+                appliedSessionRef.current = null;
                 setMessages([]);
                 setSessionId(session.id);
                 setError("");
