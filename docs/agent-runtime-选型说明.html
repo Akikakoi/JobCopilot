@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JobCopilot 为什么自研 Agent Runtime</title>
+<style>
+  :root {
+    --bg: #f6f7f8;
+    --ink: #16181a;
+    --muted: #585e63;
+    --faint: #8a9096;
+    --hair: #d9dcde;
+    --hair-strong: #b9bec2;
+    --accent: #1e4d3a;
+    --accent-soft: #e6eeea;
+    --code-bg: #1a1d1f;
+    --code-ink: #d4d7d9;
+    --paper: #fbfbfc;
+    --serif: "Source Han Serif SC", "Noto Serif SC", "Songti SC", SimSun, serif;
+    --sans: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 48px;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; gap: 0; padding: 0 20px; }
+    nav.toc { display: none; }
+  }
+
+  /* ---------- TOC ---------- */
+  nav.toc {
+    position: sticky;
+    top: 48px;
+    align-self: start;
+    padding-top: 8px;
+  }
+  nav.toc .toc-kicker {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 14px;
+  }
+  nav.toc ol {
+    list-style: none;
+    border-left: 1px solid var(--hair);
+  }
+  nav.toc a {
+    display: block;
+    padding: 6px 0 6px 14px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13px;
+    line-height: 1.4;
+    border-left: 1px solid transparent;
+    margin-left: -1px;
+  }
+  nav.toc a:hover { color: var(--ink); }
+  nav.toc a.on { color: var(--accent); border-left-color: var(--accent); }
+  nav.toc .toc-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    margin-right: 8px;
+    color: var(--faint);
+  }
+
+  /* ---------- Cover ---------- */
+  header.cover {
+    padding: 72px 0 40px;
+    border-bottom: 1px solid var(--hair);
+  }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(32px, 5vw, 46px);
+    font-weight: 590;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    max-width: 22em;
+  }
+  .lede {
+    margin-top: 18px;
+    font-size: 17px;
+    color: var(--muted);
+    max-width: 38em;
+    line-height: 1.65;
+  }
+  .meta-row {
+    margin-top: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+  }
+  .meta-row dt { color: var(--faint); margin-right: 6px; }
+  .meta-row dd { display: inline; color: var(--ink); }
+
+  /* ---------- Sections ---------- */
+  main { padding-bottom: 80px; }
+  section {
+    padding-top: 56px;
+    scroll-margin-top: 32px;
+  }
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+  .sec-no {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+  }
+  h2 {
+    font-family: var(--serif);
+    font-size: 26px;
+    font-weight: 590;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  .sec-rule {
+    height: 1px;
+    background: var(--hair);
+    margin: 14px 0 22px;
+  }
+  h3 {
+    font-family: var(--sans);
+    font-size: 17px;
+    font-weight: 550;
+    margin: 28px 0 10px;
+    letter-spacing: 0;
+  }
+  p {
+    max-width: 68ch;
+    margin-bottom: 14px;
+    color: var(--ink);
+  }
+  p.dim { color: var(--muted); }
+  strong { font-weight: 550; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--hair-strong); }
+  a:hover { border-bottom-color: var(--accent); }
+  code.inline {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  ul.plain, ol.plain {
+    max-width: 68ch;
+    margin: 0 0 14px 1.4em;
+    color: var(--ink);
+  }
+  ul.plain li, ol.plain li { margin-bottom: 6px; }
+
+  /* ---------- Tables ---------- */
+  .tbl-wrap { overflow-x: auto; margin: 18px 0 22px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  thead th {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    text-align: left;
+    padding: 8px 12px 8px 0;
+    border-bottom: 1px solid var(--hair-strong);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 10px 12px 10px 0;
+    border-bottom: 1px solid var(--hair);
+    vertical-align: top;
+  }
+  tbody td:first-child { font-weight: 550; }
+  td.mono, .mono { font-family: var(--mono); font-size: 13px; }
+  td .sub { display: block; font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+
+  /* ---------- Callout ---------- */
+  .note {
+    border-left: 2px solid var(--accent);
+    padding: 4px 0 4px 16px;
+    margin: 18px 0 22px;
+    max-width: 68ch;
+    color: var(--muted);
+    font-size: 15px;
+  }
+  .note .note-t {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+
+  /* ---------- Code ---------- */
+  figure.code {
+    margin: 16px 0 22px;
+    background: var(--code-bg);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  figure.code figcaption {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #7d8489;
+    padding: 8px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    letter-spacing: 0.04em;
+  }
+  pre {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--code-ink);
+    padding: 14px 16px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  pre .c { color: #6f767b; font-style: italic; }
+  pre .k { color: #8fb8a5; }
+  pre .s { color: #c9a27a; }
+  pre .n { color: #e8eaeb; }
+
+  /* ---------- Tree ---------- */
+  pre.tree {
+    background: transparent;
+    color: var(--ink);
+    font-size: 13px;
+    padding: 0;
+    margin: 8px 0 16px;
+  }
+
+  /* ---------- Compare ---------- */
+  .duo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    margin: 18px 0 22px;
+    border-top: 1px solid var(--hair);
+  }
+  .duo > div { padding: 16px 18px 16px 0; }
+  .duo > div + div { border-left: 1px solid var(--hair); padding-left: 18px; }
+  .duo h4 {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 10px;
+  }
+  .duo p { font-size: 14px; margin-bottom: 8px; }
+  .duo ul { margin-left: 1.2em; font-size: 14px; }
+  .duo li { margin-bottom: 4px; }
+  @media (max-width: 720px) { .duo { grid-template-columns: 1fr; } .duo > div + div { border-left: none; padding-left: 0; border-top: 1px solid var(--hair); } }
+
+  /* ---------- Timeline ---------- */
+  .steps { margin: 18px 0 22px; }
+  .step {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 14px;
+    position: relative;
+    padding-bottom: 20px;
+  }
+  .step:last-child { padding-bottom: 4px; }
+  .step::before {
+    content: "";
+    position: absolute;
+    left: 17px;
+    top: 28px;
+    bottom: 0;
+    width: 1px;
+    background: var(--hair);
+  }
+  .step:last-child::before { display: none; }
+  .step-no {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--hair-strong);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    background: var(--bg);
+  }
+  .step-t { font-weight: 550; margin-bottom: 4px; }
+  .step-d { font-size: 14px; color: var(--muted); max-width: 62ch; }
+  .step-d code.inline { font-size: 12px; }
+
+  /* ---------- Footer ---------- */
+  footer.colophon {
+    border-top: 1px solid var(--hair);
+    padding: 28px 0 56px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+  }
+  footer.colophon span + span::before { content: "·"; margin-right: 24px; color: var(--hair-strong); }
+
+  .cap {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--faint);
+    margin: -14px 0 22px;
+    letter-spacing: 0.02em;
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<nav class="toc" aria-label="目录">
+  <div class="toc-kicker">Contents</div>
+  <ol>
+    <li><a href="#s1"><span class="toc-num">01</span>结论</a></li>
+    <li><a href="#s2"><span class="toc-num">02</span>决策出处</a></li>
+    <li><a href="#s3"><span class="toc-num">03</span>自研 Runtime 长什么样</a></li>
+    <li><a href="#s4"><span class="toc-num">04</span>三个框架为何不引入</a></li>
+    <li><a href="#s5"><span class="toc-num">05</span>自研要自己扛的脏活</a></li>
+    <li><a href="#s6"><span class="toc-num">06</span>代价与已知取舍</a></li>
+    <li><a href="#s7"><span class="toc-num">07</span>什么时候应该换</a></li>
+  </ol>
+</nav>
+
+<div>
+
+<header class="cover">
+  <div class="kicker">Architecture Decision · JobCopilot</div>
+  <h1>为什么不用 LangChain、LlamaIndex 或 AutoGen</h1>
+  <p class="lede">Agent 执行循环由项目自己实现，只依赖 OpenAI 兼容协议和 httpx。这不是对框架的否定，而是学习目标、工具形态和复杂度预算共同决定的取舍。</p>
+  <dl class="meta-row">
+    <div><dt>日期</dt><dd>2026-11-25</dd></div>
+    <div><dt>依据</dt><dd>开发文档 D4 · runtime.py</dd></div>
+    <div><dt>范围</dt><dd>后端 agent / llm 模块</dd></div>
+  </dl>
+</header>
+
+<main>
+
+<!-- ========== 01 ========== -->
+<section id="s1">
+  <div class="sec-head"><span class="sec-no">01</span><h2>结论</h2></div>
+  <div class="sec-rule"></div>
+
+  <p>JobCopilot 的 Agent 不是从零发明协议，而是把 OpenAI function calling 的标准循环写在 <code class="inline">backend/app/agent/runtime.py</code> 里——整个执行循环 222 行，LLM 适配层 149 行，工具注册器 1290 行。框架被砍掉的理由可以压成三句：</p>
+
+  <ol class="plain">
+    <li><strong>学习价值是第一验收标准</strong>。开发文档把「自研 Agent Runtime」列为学习目标第 1 位。引入 LangChain 等于把这个目标外包给第三方库，项目就失去了存在理由。</li>
+    <li><strong>需要的原语极少</strong>。两个 Agent 共用一条 ReAct 式工具循环，底层是标准 function calling。LangChain 的 Chain / Retriever / Memory 抽象、LlamaIndex 的索引体系、AutoGen 的多 Agent 会话协议，对本项目都是额外概念税。</li>
+    <li><strong>工具就是后端 service 函数</strong>。权限、事务、参数校验都要贴着 SQLAlchemy session 和当前用户走。框架的工具基类、Runnable 接口和回调栈会让这条路径变绕，排错时多穿一层。</li>
+  </ol>
+
+  <p>自研不等于重造所有轮子。向量检索用 numpy 暴力余弦，简历解析用 pdfplumber / python-docx，模型调用走 OpenAI 兼容 HTTP——这些成熟件都留着。被砍掉的只是<strong>编排层框架</strong>。</p>
+</section>
+
+<!-- ========== 02 ========== -->
+<section id="s2">
+  <div class="sec-head"><span class="sec-no">02</span><h2>决策出处</h2></div>
+  <div class="sec-rule"></div>
+
+  <p>这条决策写在 <code class="inline">docs/开发文档.md</code> 决策记录 D4，2026-11-20 定稿：</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>编号</th><th>决策项</th><th>结论</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>D1</td>
+          <td>项目性质</td>
+          <td>学习项目，验收 = 学习价值 + 可演示性<span class="sub">不做真实上线，不以市场指标验收</span></td>
+        </tr>
+        <tr>
+          <td>D4</td>
+          <td>Agent 深度</td>
+          <td>自研 tool-calling Agent Runtime（不用 LangChain / LangGraph）<span class="sub">向 multi-agent 伸手但不做；双 Agent 对谈作为彩蛋另计</span></td>
+        </tr>
+        <tr>
+          <td>D7</td>
+          <td>LLM 接入</td>
+          <td>DeepSeek <span class="mono">deepseek-chat</span>，OpenAI 兼容适配层<span class="sub">模型可配置切换，不改业务代码</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>D4 明确点名 LangChain / LangGraph。LlamaIndex 和 AutoGen 虽未写进表格，但被同一条逻辑覆盖：它们和 LangChain 一样是编排层框架，引入即替代自研 Runtime 这个学习目标。</p>
+
+  <p>开发文档 §7.1 同时规定了自研的边界——工具就是后端 service 函数、单轮工具调用有上限、异常回喂不炸循环、权限在工具层收口。这四条约束反过来证明了为什么框架不合适：框架的抽象点（Chain、Agent Executor、Group Chat）和这些约束不在同一个层面上。</p>
+</section>
+
+<!-- ========== 03 ========== -->
+<section id="s3">
+  <div class="sec-head"><span class="sec-no">03</span><h2>自研 Runtime 长什么样</h2></div>
+  <div class="sec-rule"></div>
+
+  <p>Agent 相关代码全部集中在 <code class="inline">backend/app/agent/</code>，没有任何第三方 agent 依赖：</p>
+
+<pre class="tree">backend/app/agent/
+├── runtime.py     222 行   执行循环 + SSE + 历史清洗
+├── tools.py     1 290 行   工具注册器 + 双侧工具清单
+├── duel.py       235 行   双 Agent 自主对谈编排
+├── prompts.py    约 130 行   系统 prompt
+├── memory.py      53 行   结果序列化 / 长期记忆读写
+└── __init__.py
+
+backend/app/llm/
+└── client.py     149 行   OpenAI 兼容 chat / embedding / 流式</pre>
+  <div class="cap">行数统计自当前工作区文件，非运行时估算。</div>
+
+  <h3>3.1 执行循环</h3>
+  <p><code class="inline">AgentRuntime.stream()</code> 是唯一的主循环。它不做规划、不建任务图、不搞反思，只做教科书式的 tool-calling：</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-no">1</div>
+      <div>
+        <div class="step-t">组装 messages</div>
+        <div class="step-d">system prompt + 最近 <code class="inline">HISTORY_LIMIT = 24</code> 条历史 + 本次输入。会话首次对话时先检索一次长期记忆注入 prompt。</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">2</div>
+      <div>
+        <div class="step-t">带 tools 调 LLM</div>
+        <div class="step-d">工具 schema 来自注册器，格式就是 OpenAI function calling 的 <code class="inline">{"type":"function", ...}</code>。</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">3</div>
+      <div>
+        <div class="step-t">有 tool_calls 就执行</div>
+        <div class="step-d">逐个调用注册的 handler，结果以 <code class="inline">role: tool</code> 追加，回到第 1 步。流式 token 与工具开始 / 结束事件同步推给前端。</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-no">4</div>
+      <div>
+        <div class="step-t">纯文本则收尾</div>
+        <div class="step-d">assistant 消息落库，yield <code class="inline">done</code>。若已达 <code class="inline">MAX_TOOL_ROUNDS = 8</code> 仍未收尾，写入兜底文案结束。</div>
+      </div>
+    </div>
+  </div>
+
+  <figure class="code">
+    <figcaption>backend/app/agent/runtime.py · 主循环骨架（节选）</figcaption>
+    <pre>for _ in range(MAX_TOOL_ROUNDS):
+    content_buffer = ""
+    call_accumulator: dict[int, dict] = {}
+
+    async for chunk in chat_completion_stream(messages, tools=tool_schemas):
+        <span class="c"># 流式 token 直接 yield 给 SSE</span>
+        ...
+
+    if not call_accumulator:
+        <span class="c"># 没有工具调用 → 本轮结束</span>
+        yield {"type": "done", ...}
+        return
+
+    <span class="c"># 有工具调用 → 执行、落库、回填 messages、继续循环</span>
+    for call in tool_calls:
+        result_text = await self._execute_tool(name, raw_args)
+        messages.append({"role": "tool", "tool_call_id": ..., "content": result_text})</pre>
+  </figure>
+
+  <h3>3.2 工具就是 service 函数</h3>
+  <p>工具不是框架里的 BaseTool 子类，而是一个 dataclass：名字、描述、JSON Schema 参数、一个 <code class="inline">async (db, user, **args)</code> 形状的 handler。Agent 和 REST API 调用的是同一层业务代码。</p>
+
+  <figure class="code">
+    <figcaption>backend/app/agent/tools.py · 工具定义</figcaption>
+    <pre><span class="k">@dataclass</span>
+<span class="k">class</span> <span class="n">Tool</span>:
+    name: str
+    description: str
+    parameters: dict
+    handler: Handler   <span class="c"># Callable[..., Awaitable[Any]]</span>
+
+    <span class="k">def</span> <span class="n">schema</span>(<span class="n">self</span>) -> dict:
+        <span class="k">return</span> {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.parameters,
+            },
+        }</pre>
+  </figure>
+
+  <p>权限在这里收口：handler 第一个业务参数就是当前 <code class="inline">User</code>，Agent <strong>永远只能操作本人资源</strong>，不依赖 prompt 自觉。求职者 Agent 与招聘方 Agent 各持一份工具清单，敏感动作（接受 Offer、推进流程状态）在描述里写明「需用户明确表态」。</p>
+
+  <h3>3.3 LLM 适配层</h3>
+  <p><code class="inline">llm/client.py</code> 用 httpx 直写 OpenAI 兼容协议：非流式 <code class="inline">chat_completion</code>、流式 <code class="inline">chat_completion_stream</code>（手工解析 SSE）、<code class="inline">embed_texts</code> 批量向量化。chat 与 embedding 各自独立配置 base_url / api_key / model，换供应商只改 <code class="inline">backend/.env</code>。</p>
+
+  <p>这就是项目里唯一的「框架替代品」——一个 149 行的协议适配器，而不是一个 Agent 框架。</p>
+
+  <h3>3.4 双 Agent 对谈</h3>
+  <p><code class="inline">duel.py</code> 是招聘方 Agent 与候选人 Agent 的自主对谈彩蛋。它没有用 AutoGen 的 Group Chat，而是 235 行手写编排：双方各持<strong>受限只读工具集</strong>，交替发言，最后一轮强制招聘方给出是否推进面试的结论。对谈不落库、不产生投递等副作用。</p>
+</section>
+
+<!-- ========== 04 ========== -->
+<section id="s4">
+  <div class="sec-head"><span class="sec-no">04</span><h2>三个框架为何不引入</h2></div>
+  <div class="sec-rule"></div>
+
+  <h3>4.1 LangChain / LangGraph</h3>
+  <p>D4 点名淘汰。理由不是「LangChain 不好」，而是它解决的问题本项目不存在，它带来的成本本项目扛不起。</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>维度</th><th>LangChain / LangGraph 会带来什么</th><th>JobCopilot 实际需要什么</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>抽象层级</td>
+          <td>Chain、Runnable、Retriever、Memory、Agent Executor、StateGraph</td>
+          <td>一条 function calling 循环 + 一张工具表</td>
+        </tr>
+        <tr>
+          <td>工具接入</td>
+          <td>继承 BaseTool 或包 <span class="mono">@tool</span> 装饰器，走框架的调用协议</td>
+          <td>直接持有 SQLAlchemy session 和 User 的 service 函数</td>
+        </tr>
+        <tr>
+          <td>流式输出</td>
+          <td>Callbacks / astream_events 事件体系，再映射到自己的 SSE</td>
+          <td>循环里原生 yield token / tool_start / tool_end</td>
+        </tr>
+        <tr>
+          <td>学习价值</td>
+          <td>学会一套框架 API，框架升级后可能重来</td>
+          <td>吃透 tool-calling、消息协议、历史清洗、权限收口</td>
+        </tr>
+        <tr>
+          <td>依赖面</td>
+          <td>langchain-core + 集成包 + 版本变动频繁</td>
+          <td>requirements.txt 里没有任何 agent 包</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>LangChain 的价值在快速拼装通用 RAG / Agent demo，或在成熟产品里复用生态集成。本项目两者都不占：不是 demo 拼装（要的就是手写循环），也没有几十个第三方工具要接（工具就是自己的 service）。LangGraph 的状态图更适合多角色、有分支回环的复杂工作流；这里的双 Agent 对谈只是一个固定的交替发言编排，用 <code class="inline">duel.py</code> 的 for 循环就写完了。</p>
+
+  <h3>4.2 LlamaIndex</h3>
+  <p>LlamaIndex 的核心是<strong>数据框架</strong>：Document / Node / Index / Retriever / Query Engine，强项是把异构数据源建成索引再做 RAG。JobCopilot 的检索场景和它错位：</p>
+
+  <ul class="plain">
+    <li>向量召回的对象是<strong>结构化简历 vs 结构化 JD</strong>，不是非结构化文档切块。简历已经过 LLM 抽取成 JSON，匹配走「向量召回 → 规则精排 → LLM 解读」三段式，规则打分占大头（技能 50 + 年限 20 + 地点 15 + 薪资 15）。</li>
+    <li>向量存 SQLite JSON 字段，numpy 暴力余弦取 Top-20。这个量级（种子数据 322 个岗位）用不上 FAISS / Milvus，更用不上 LlamaIndex 的索引抽象。</li>
+    <li>如果哪天要接 PDF 知识库、多文档问答，LlamaIndex 才是对口的工具。现在的「PDF → 结构化档案」是抽取管线，不是检索管线。</li>
+  </ul>
+
+  <h3>4.3 AutoGen</h3>
+  <p>AutoGen 的卖点是<strong>多 Agent 会话</strong>：Agent 之间互发消息、群聊、人机协作、代码执行沙箱。项目里唯一的「多 Agent」是 <code class="inline">duel.py</code> 的双方面谈，形态完全不同：</p>
+
+  <div class="duo">
+    <div>
+      <h4>AutoGen Group Chat</h4>
+      <p>为开放协作设计：多个 Agent 自主决定发言、互相互动、可接代码执行器与人类代理。</p>
+      <ul>
+        <li>发言权交给框架的 speaker selection</li>
+        <li>消息总线、会话协议由库管理</li>
+        <li>适合探索式、角色多的编排</li>
+      </ul>
+    </div>
+    <div>
+      <h4>duel.py 手写编排</h4>
+      <p>为固定演示设计： seeker / employer 交替各说一轮，最后一轮招聘方必须给结论。</p>
+      <ul>
+        <li>发言顺序写死在 for 循环里</li>
+        <li>工具白名单 <span class="mono">DUEL_TOOLS</span> 只放只读工具</li>
+        <li>对谈不落库，不产生业务副作用</li>
+      </ul>
+    </div>
+  </div>
+
+  <p>为一个彩蛋引入整个 AutoGen，依赖和概念都不成比例。开发文档 D3 / D4 的态度也是一致的：「向 multi-agent 伸手但不做」——对谈作为二期彩蛋实现，不把项目升级成多 Agent 系统。</p>
+</section>
+
+<!-- ========== 05 ========== -->
+<section id="s5">
+  <div class="sec-head"><span class="sec-no">05</span><h2>自研要自己扛的脏活</h2></div>
+  <div class="sec-rule"></div>
+
+  <p>不用框架不等于没有工程问题。下面这些点框架通常会替你挡一层，自研就得自己写。它们也正好是学习目标的一部分。</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>问题</th><th>JobCopilot 的做法</th><th>位置</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>工具死循环</td>
+          <td>单轮工具调用上限 8 次，超限写入兜底文案</td>
+          <td class="mono">runtime.py · MAX_TOOL_ROUNDS</td>
+        </tr>
+        <tr>
+          <td>工具异常</td>
+          <td>捕获后回滚事务，错误 JSON 回喂 LLM，不炸循环</td>
+          <td class="mono">runtime.py · _execute_tool</td>
+        </tr>
+        <tr>
+          <td>历史截断</td>
+          <td>取最近 24 条；剔除孤立的 tool 开头；丢弃缺少 tool 结果的不完整轮</td>
+          <td class="mono">runtime.py · _build_messages</td>
+        </tr>
+        <tr>
+          <td>流式 tool_calls</td>
+          <td>按 index 累积 name / arguments 分片，结束后再执行</td>
+          <td class="mono">runtime.py / duel.py / client.py</td>
+        </tr>
+        <tr>
+          <td>参数不合法</td>
+          <td>JSON 解析失败兜 <span class="mono">{"_raw": ...}</span>；TypeError 回喂「参数不匹配」</td>
+          <td class="mono">runtime.py · _safe_json / _execute_tool</td>
+        </tr>
+        <tr>
+          <td>权限越界</td>
+          <td>handler 强制注入当前 User，不靠 prompt 自觉</td>
+          <td class="mono">tools.py · 所有 handler 签名</td>
+        </tr>
+        <tr>
+          <td>上下文超窗</td>
+          <td>简单截断最近 N 条，不做摘要压缩</td>
+          <td class="mono">开发文档 §7.4 已知取舍</td>
+        </tr>
+        <tr>
+          <td>对谈副作用</td>
+          <td>对谈只用只读工具白名单，不落库</td>
+          <td class="mono">duel.py · DUEL_TOOLS</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>这些代码加起来不到三百行循环逻辑。框架能提供的是更通用的版本（摘要记忆、更聪明的重试、可视化 StateGraph）。本项目的选择是：<strong>先把这些脏活亲手写一遍</strong>，等真的撞到截断导致失忆、工具雪崩这类问题，再决定要不要借框架的解法。</p>
+</section>
+
+<!-- ========== 06 ========== -->
+<section id="s6">
+  <div class="sec-head"><span class="sec-no">06</span><h2>代价与已知取舍</h2></div>
+  <div class="sec-rule"></div>
+
+  <p>自研不是免费午餐。下面这些代价是真实存在的，开发文档里也如实记了一部分。</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>失去了什么</th><th>影响</th><th>当前态度</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>生态集成</td>
+          <td>接 Slack、Notion、各种 VectorStore 要自己写适配</td>
+          <td>本项目工具全是内部 service，暂无此需求</td>
+        </tr>
+        <tr>
+          <td>开箱记忆 / RAG 组件</td>
+          <td>长期记忆只有 save / search 两个工具，无摘要压缩</td>
+          <td>D11 有意做薄；超窗截断是已知取舍</td>
+        </tr>
+        <tr>
+          <td>可观测性</td>
+          <td>没有 LangSmith / Langfuse 开箱埋点</td>
+          <td>消息全落 <span class="mono">agent_messages</span> 表，SSE 可视化工具调用</td>
+        </tr>
+        <tr>
+          <td>多人协作协议</td>
+          <td>没有现成 Group Chat / Human-in-the-loop 组件</td>
+          <td>双 Agent 对谈手写编排， human 确认放在工具描述层</td>
+        </tr>
+        <tr>
+          <td>升级红利</td>
+          <td>框架新特性（如结构化输出流式、更稳的 ReAct）吃不到</td>
+          <td>模型能力主要通过 OpenAI 兼容协议直接享受</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <span class="note-t">注意</span>
+    自研的对象是<strong>编排层</strong>。模型协议、HTTP、向量计算、文档解析都用现成库。把「不用 agent 框架」理解成「什么轮子都自己造」是对这条决策的误读。
+  </div>
+</section>
+
+<!-- ========== 07 ========== -->
+<section id="s7">
+  <div class="sec-head"><span class="sec-no">07</span><h2>什么时候应该换</h2></div>
+  <div class="sec-rule"></div>
+
+  <p>D4 说「后续开发不得静默更改；如需推翻，先更新本文档」。出现下面任一情况，才值得重新评估：</p>
+
+  <ol class="plain">
+    <li><strong>工具数量失控</strong>。双侧工具如果涨到几十个、开始接外部 SaaS，自己维护 JSON Schema 和 handler 注册会累，框架的工具生态开始有意义。</li>
+    <li><strong>编排复杂到手写开始出错</strong>。需要条件分支、人工中断续跑、多角色动态发言、失败回滚整条链路——LangGraph 的 StateGraph 或 AutoGen 的会话协议此时才比 for 循环更可靠。</li>
+    <li><strong>项目性质变了</strong>。从学习项目变成要交付的生产系统，学习价值不再是第一验收标准，团队熟悉框架时引入框架的性价比会反转。</li>
+    <li><strong>检索需求变成真 RAG</strong>。要索引大量非结构化文档、做多源召回与重排，LlamaIndex（或同类）就该进入选型讨论，和 Agent Runtime 是两件事。</li>
+  </ol>
+
+  <p>在这四种情况出现之前，自研 Runtime 是和项目定位最一致的选择：代码量可控、协议是标准的、每一条权限和截断规则都看得见。</p>
+
+  <p class="dim">一句话收束：这里不用 LangChain、LlamaIndex、AutoGen，是因为这个项目<strong>要学的就是那层循环本身</strong>，而它需要的编排又简单到不值得为之外聘一个框架。</p>
+</section>
+
+</main>
+
+<footer class="colophon">
+  <span>JobCopilot · 架构决策说明</span>
+  <span>2026-11-25</span>
+  <span>依据 docs/开发文档.md D4 与 backend/app/agent 当前实现</span>
+</footer>
+
+</div>
+</div>
+
+<script>
+  // TOC 当前节高亮
+  const links = document.querySelectorAll('nav.toc a');
+  const sections = document.querySelectorAll('main section');
+  const map = new Map();
+  sections.forEach(s => map.set(s.id, s));
+
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + e.target.id));
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => obs.observe(s));
+</script>
+
+</body>
+</html>

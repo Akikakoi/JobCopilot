@@ -90,7 +90,7 @@ JobCopilot/
 │  │  └─ index.css     设计 token 与两端主题
 │  ├─ tailwind.config.js
 │  └─ vite.config.ts
-├─ seed_data/          219 个岗位、56 份简历（Markdown）
+├─ seed_data/          322 个岗位、94 份简历（Markdown）
 ├─ docs/开发文档.md
 ├─ scripts/dev.ps1     PowerShell 一键启动
 └─ start.bat           Windows 一键启动

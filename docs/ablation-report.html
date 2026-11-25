@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JobCopilot 匹配系统 · 消融实验报告</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --paper: #161b22;
+    --paper-2: #1c2128;
+    --ink: #e6e8ee;
+    --muted: #8b93a3;
+    --line: #2a3140;
+    --accent: #7dd3a8;
+    --accent-dim: rgba(125, 211, 168, 0.12);
+    --warn: #d9a35a;
+    --danger: #e07a6a;
+    --display: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    --mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.65; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+  .sidebar {
+    position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--line); padding: 28px 18px; background: #0f131a;
+  }
+  .sidebar .brand { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 18px; }
+  .sidebar nav a { display: block; padding: 7px 10px; margin: 2px 0; font-size: 13px; color: var(--muted); border-left: 2px solid transparent; }
+  .sidebar nav a:hover { color: var(--ink); text-decoration: none; border-left-color: var(--line); }
+  .sidebar nav a.active { color: var(--accent); border-left-color: var(--accent); }
+  .sidebar .foot { margin-top: 28px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); line-height: 1.8; }
+
+  main { padding: 40px 48px 80px; max-width: 1180px; }
+  .prose-block { max-width: 65ch; }
+  .bleed { max-width: none; }
+
+  header.head { border-bottom: 1px solid var(--line); padding-bottom: 22px; margin-bottom: 28px; }
+  .crumb { font-family: var(--mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+  h1 { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; margin: 8px 0 6px; line-height: 1.15; }
+  .head-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .head-meta b { color: var(--accent); font-weight: 500; }
+
+  section { margin-top: 44px; }
+  h2 { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 12px; display: flex; align-items: baseline; gap: 10px; }
+  h2 .no { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  h3 { font-size: 16px; font-weight: 600; margin: 22px 0 8px; }
+  p { margin: 0 0 12px; }
+  p.lede { font-size: 16.5px; line-height: 1.7; color: var(--ink); }
+  .muted { color: var(--muted); }
+  small { font-size: 12.5px; }
+  code { font-family: var(--mono); font-size: 0.92em; background: var(--paper-2); padding: 1px 5px; border-radius: 3px; }
+
+  .metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--line); background: var(--paper); margin: 16px 0 8px; }
+  .metric { padding: 14px 16px; border-right: 1px solid var(--line); }
+  .metric:last-child { border-right: none; }
+  .metric .k { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .metric .v { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; }
+  .metric .v small { font-size: 13px; color: var(--muted); font-weight: 400; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--paper); border: 1px solid var(--line); font-size: 13px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); background: var(--paper-2); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-size: 12.5px; }
+  tr.hl td { background: var(--accent-dim); }
+  td .bar { display: inline-block; height: 8px; background: var(--accent); vertical-align: middle; margin-right: 6px; opacity: 0.85; }
+  td .bar.warn { background: var(--warn); }
+  td .bar.danger { background: var(--danger); }
+
+  .panel { background: var(--paper); border: 1px solid var(--line); padding: 18px 20px; margin: 14px 0; }
+  .panel h4 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+  .panel p { margin: 0 0 8px; }
+  .panel p:last-child { margin: 0; }
+
+  .callout { border: 1px solid var(--line); border-left: 3px solid var(--accent); padding: 14px 18px; margin: 16px 0; background: var(--paper); }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout .t { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 6px; }
+  .callout.warn .t { color: var(--warn); }
+
+  pre { background: var(--paper-2); border: 1px solid var(--line); padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; color: #cdd6f4; margin: 10px 0; }
+  pre .cmt { color: var(--muted); }
+
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+  .tl-step { display: grid; grid-template-columns: 36px 1fr; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .tl-step:last-child { border-bottom: none; }
+  .tl-no { font-family: var(--mono); font-size: 12px; color: var(--accent); text-align: right; padding-top: 2px; }
+  .tl-body .tt { font-weight: 600; font-size: 14px; }
+  .tl-body .tx { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+
+  .tag { display: inline-block; font-family: var(--mono); font-size: 10.5px; padding: 2px 8px; border: 1px solid var(--line); color: var(--muted); margin-right: 6px; }
+  .tag.hot { color: var(--accent); border-color: rgba(125,211,168,0.4); }
+  .tag.mid { color: var(--warn); border-color: rgba(217,163,90,0.4); }
+  .tag.cold { color: var(--danger); border-color: rgba(224,122,106,0.4); }
+
+  footer.colophon { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.8; }
+
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    main { padding: 24px 20px 60px; }
+    .metric-row { grid-template-columns: repeat(2, 1fr); }
+    .metric:nth-child(2) { border-right: none; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">JobCopilot · Ablation</div>
+    <nav>
+      <a href="#s1">01 实验设置</a>
+      <a href="#s2">02 核心结论</a>
+      <a href="#s3">03 召回层消融</a>
+      <a href="#s4">04 规则分项消融</a>
+      <a href="#s5">05 排序加权重消融</a>
+      <a href="#s6">06 排序质量与风险</a>
+      <a href="#s7">07 案例拆解</a>
+      <a href="#s8">08 建议与边界</a>
+    </nav>
+    <div class="foot">
+      n_resumes = 40<br />
+      n_jobs = 322<br />
+      recall_top_n = 20<br />
+      k = 10<br />
+      <br />
+      数据源 jobcopilot.db<br />
+      2026-11-25
+    </div>
+  </aside>
+
+  <main>
+    <header class="head">
+      <div class="crumb">Matching System · Ablation Study</div>
+      <h1>匹配系统消融实验</h1>
+      <div class="head-meta">40 名求职者 × 322 个在招岗位 · 完整 pipeline 为 baseline · <b>12 组配置</b></div>
+    </header>
+
+    <section id="s1">
+      <h2><span class="no">01</span>实验设置</h2>
+      <div class="prose-block">
+        <p class="lede">把推荐 pipeline 拆成三层——召回、规则精排、排序加权——逐个摘掉组件，看它们对最终 top-10 排序的真实贡献。这不是单元测试的替代品，而是回答「每个部件到底有没有用、用了多少」。</p>
+        <p>baseline 复刻 <code>match_jobs_for_resume</code> 的现行逻辑：向量召回 top 20 → 规则精排（技能 50 + 年限 20 + 地点 15 + 薪资 15）→ 方向分折半 5、地点不符降权、区命中加权 → 按 rank_score 排序取前 10。消融组只关掉对应项，其余保持不动。</p>
+      </div>
+      <div class="metric-row">
+        <div class="metric"><div class="k">求职者样本</div><div class="v">40</div></div>
+        <div class="metric"><div class="k">在招岗位</div><div class="v">322</div></div>
+        <div class="metric"><div class="k">召回窗口</div><div class="v">20</div></div>
+        <div class="metric"><div class="k">评估窗口</div><div class="v">top 10 / 20</div></div>
+      </div>
+      <div class="prose-block">
+        <p class="muted"><small>评估指标：Top-10 重合岗位数（对 baseline）、薪资区间覆盖率、城市命中率、必需技能全命中率、同分破缺率（相邻同分对 / 总对数，越高排序信息量越低）、Top-10 公司多样性（1 − HHI）、Kendall τ。反馈偏置（save +10 / dislike −15 / 同公司 +5）因库里 <code>job_feedback</code> 为 0 行，本次未测。</small></p>
+      </div>
+      <div class="panel">
+        <h4>召回对照的三种设定</h4>
+        <p><span class="tag hot">向量</span>余弦相似度取前 20（现行）</p>
+        <p><span class="tag mid">关键词</span>意向标题 / 类别 / 二级方向命中后按 id 倒序取前 20，无意向则全库退化</p>
+        <p><span class="tag cold">随机</span>每份简历固定种子洗牌全库取前 20，与向量、关键词均无关</p>
+      </div>
+    </section>
+
+    <section id="s2">
+      <h2><span class="no">02</span>核心结论</h2>
+      <div class="prose-block">
+        <p class="lede">一句话：向量召回是这套系统的承重墙，摘掉后 top-10 与 baseline 完全不重合，城市命中率从 44% 掉到 0，薪资覆盖率从 66% 掉到 42%，平均分从 44 掉到 24。规则层里必需技能分是最强的排序信号；薪资、地点、经验是中等信号；方向加权和加分技能分在当前数据下对 top-10 几乎没有可观测影响。</p>
+      </div>
+      <div class="callout">
+        <div class="t">三句话带走</div>
+        <p>① 召回决定「看到哪些岗位」，规则决定「看到之后怎么排」——召回错了，规则再准也救不回来。</p>
+        <p>② 必需技能是规则层第一信号（平均挤掉 2.2 个 baseline 岗位、τ 0.77）；薪资是第二信号（挤掉 1.2 个、τ 0.76，且是唯一让薪资覆盖率下降的规则项）。</p>
+        <p>③ 方向加权在 40 人样本里对 top-10 零影响（τ = 1.0）；地点分与地点降权各管一头，只留一个都会让城市命中率下滑 7–16 个百分点。</p>
+      </div>
+    </section>
+
+    <section id="s3">
+      <h2><span class="no">03</span>召回层消融</h2>
+      <div class="bleed">
+      <table>
+        <thead>
+          <tr><th>配置</th><th class="num">Top-10 重合</th><th class="num">薪资覆盖</th><th class="num">城市命中</th><th class="num">平均分</th><th class="num">同分破缺</th><th class="num">多样性</th><th class="num">τ</th></tr>
+        </thead>
+        <tbody>
+          <tr class="hl"><td>baseline（向量）</td><td class="num">10.0</td><td class="num">65.8%</td><td class="num">43.9%</td><td class="num">44.5</td><td class="num">34.7%</td><td class="num">0.69</td><td class="num">1.00</td></tr>
+          <tr><td>关键词召回</td><td class="num">0.0</td><td class="num">41.8%</td><td class="num">0.0%</td><td class="num">23.7</td><td class="num">75.8%</td><td class="num">0.85</td><td class="num">—</td></tr>
+          <tr><td>随机召回</td><td class="num">0.5</td><td class="num">65.3%</td><td class="num">27.4%</td><td class="num">25.4</td><td class="num">55.3%</td><td class="num">0.87</td><td class="num">0.78</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="prose-block">
+        <h3>向量召回摘掉后发生了什么</h3>
+        <p>Top-10 与 baseline <b>重合数为 0</b>——向量召回选出来的 20 个岗位，和关键词 / 随机选出来的 20 个，几乎是两批不同的岗位。规则精排只能在「召回给的那 20 个」里排序，召回错了，后面全错。</p>
+        <p>三个质量指标同时塌方：城市命中率 <b>43.9% → 0%</b>（关键词召回根本不看地点，随机召回只碰对 27%）；薪资覆盖 <b>65.8% → 41.8%</b>；平均匹配分 <b>44.5 → 23.7</b>。同时同分破缺率从 35% 涨到 76%——留下的这批岗位大多技能不匹配、分数挤在低位，排序基本失去意义。</p>
+        <p>一个反直觉的观察：随机召回的薪资覆盖率（65.3%）几乎追平向量召回，但城市命中率只有 27%、top-10 重合只有 0.5 个。说明「薪资覆盖」在 322 个岗位里不算稀缺属性（很多岗位区间本来就宽），而「城市命中」才是向量召回真正带进来的稀缺信号——它把地点相近、语义相关的岗位捞进了召回窗口。</p>
+        <p>关键词召回的城市命中是 <b>0%</b>，不是因为它召回的岗位都不在目标城市，而是因为意向城市没有被用作召回条件——现行 <code>search_jobs</code> 的关键词路径不看简历意向。这是设计缺口，不是召回算法本身的缺陷。</p>
+      </div>
+    </section>
+
+    <section id="s4">
+      <h2><span class="no">04</span>规则分项消融</h2>
+      <div class="bleed">
+      <table>
+        <thead>
+          <tr><th>摘掉的项</th><th class="num">Top-10 重合</th><th class="num">薪资覆盖</th><th class="num">城市命中</th><th class="num">平均分</th><th class="num">同分破缺</th><th class="num">多样性</th><th class="num">τ</th></tr>
+        </thead>
+        <tbody>
+          <tr class="hl"><td>baseline</td><td class="num">10.0</td><td class="num">65.8%</td><td class="num">43.9%</td><td class="num">44.5</td><td class="num">34.7%</td><td class="num">0.69</td><td class="num">1.00</td></tr>
+          <tr><td>必需技能（40 分）</td><td class="num">7.8</td><td class="num">69.0%</td><td class="num">52.6%</td><td class="num">28.0</td><td class="num">47.8%</td><td class="num">0.77</td><td class="num">0.77</td></tr>
+          <tr><td>加分技能（10 分）</td><td class="num">9.8</td><td class="num">65.0%</td><td class="num">44.6%</td><td class="num">43.6</td><td class="num">37.4%</td><td class="num">0.68</td><td class="num">0.94</td></tr>
+          <tr><td>工作年限（20 分）</td><td class="num">9.4</td><td class="num">65.8%</td><td class="num">45.4%</td><td class="num">28.3</td><td class="num">39.0%</td><td class="num">0.70</td><td class="num">0.80</td></tr>
+          <tr><td>地点（15 分）</td><td class="num">8.7</td><td class="num">68.8%</td><td class="num">34.6%</td><td class="num">39.5</td><td class="num">36.2%</td><td class="num">0.66</td><td class="num">0.83</td></tr>
+          <tr><td>薪资（15 分）</td><td class="num">8.8</td><td class="num">60.3%</td><td class="num">46.9%</td><td class="num">38.4</td><td class="num">53.4%</td><td class="num">0.67</td><td class="num">0.76</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="prose-block">
+        <h3>各分项的角色</h3>
+        <p><span class="tag hot">必需技能 · 主排序信号</span>摘掉后 top-10 换掉 2.2 个岗位，平均分从 44.5 跌到 28.0，同分破缺率升到 47.8%。它是 50 分权重里真正干活的部分。有趣的是，摘掉它之后薪资覆盖率和城市命中率反而小幅上升（69% / 53%）——技能门槛松了，地点薪资更合的岗位浮上来。这说明「技能硬门槛」和「意向满足」在这批数据里有轻微的张力：最匹配技能的岗位不一定最合薪资地点。</p>
+        <p><span class="tag mid">薪资 · 第二信号 + 主要破缺来源</span>摘掉后 top-10 换掉 1.2 个岗位，τ 0.76，薪资覆盖率从 65.8% 掉到 60.3%——五个规则项里唯一让薪资覆盖率下降的。同分破缺率从 34.7% 涨到 53.4%，是所有单项消融里破缺最严重的：薪资分是区分「同技能水平岗位」的主要手段。</p>
+        <p><span class="tag mid">地点 · 城市命中的守门员</span>摘掉后城市命中率从 43.9% 掉到 34.6%（-9.3 个百分点），top-10 换掉 1.3 个岗位，多样性还降了（0.69 → 0.66）。地点分不是可有可无的软偏好。</p>
+        <p><span class="tag">年限 · 中等信号</span>摘掉后 top-10 换掉 0.6 个岗位，平均分掉 16 分（说明很多岗位这 20 分没拿满，即存在年限缺口），但对排序的扰动小于技能和薪资。τ 0.80。</p>
+        <p><span class="tag">加分技能 · 当前近乎无效</span>摘掉后 top-10 只换掉 0.25 个岗位，τ 0.94，平均分只降 0.8 分。10 分权重在 rank_score 里被技能、地点的大分差淹没。要么提权，要么接受它只是展示层的「锦上添花」。</p>
+      </div>
+    </section>
+
+    <section id="s5">
+      <h2><span class="no">05</span>排序加权重消融</h2>
+      <div class="bleed">
+      <table>
+        <thead>
+          <tr><th>配置</th><th class="num">Top-10 重合</th><th class="num">薪资覆盖</th><th class="num">城市命中</th><th class="num">平均分</th><th class="num">多样性</th><th class="num">τ</th></tr>
+        </thead>
+        <tbody>
+          <tr class="hl"><td>baseline（方向 + 地点降权）</td><td class="num">10.0</td><td class="num">65.8%</td><td class="num">43.9%</td><td class="num">44.5</td><td class="num">0.69</td><td class="num">1.00</td></tr>
+          <tr><td>去掉方向加权</td><td class="num">10.0</td><td class="num">65.8%</td><td class="num">43.9%</td><td class="num">44.5</td><td class="num">0.69</td><td class="num">1.00</td></tr>
+          <tr><td>去掉地点降权</td><td class="num">9.0</td><td class="num">67.5%</td><td class="num">36.9%</td><td class="num">44.5</td><td class="num">0.66</td><td class="num">0.83</td></tr>
+          <tr><td>两个都去掉</td><td class="num">9.0</td><td class="num">67.5%</td><td class="num">36.9%</td><td class="num">44.5</td><td class="num">0.66</td><td class="num">0.83</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="prose-block">
+        <p><b>方向加权是死代码（在这批数据上）。</b>去掉后 top-10 一个都没变，τ = 1.0，所有指标与 baseline 完全相同。原因：这 40 份简历里，意向方向分要么是中性 5 分（未设方向），要么命中的岗位在向量召回里本来就和技能高分岗位高度重合，折半后的 0–5 分不足以改变 rank_score 的相对顺序。如果产品上在意「设了方向的用户应该优先看到对口岗位」，当前 ×0.5 的权重不够，需要提权或改成硬过滤。</p>
+        <p><b>地点降权是真的在干活。</b>去掉后城市命中率掉 7 个百分点，top-10 换掉 1 个岗位。它的作用和地点分部分重叠但不等价：地点分管「同城加分 / 异区小扣」，降权管「城市完全不符时按比例重罚」。两个都去掉（no_all_rank_adjust）和只去地点降权的结果一模一样——说明方向加权确实没有独立贡献，地点降权是排序加权层唯一的实际作用项。</p>
+      </div>
+    </section>
+
+    <section id="s6">
+      <h2><span class="no">06</span>排序质量与风险</h2>
+      <div class="prose-block">
+        <p>除了「哪个组件重要」，消融还暴露了几个排序质量层面的问题。</p>
+      </div>
+      <div class="panel">
+        <h4>同分破缺率 35% —— 排序信息量偏低</h4>
+        <p>baseline 在 top-20 里有 34.7% 的相邻岗位同分。摘掉薪资后升到 53.4%，关键词 / 随机召回下高达 76%。同分意味着顺序由 Python 稳定排序的原始顺序（岗位 id 倒序）决定——用户看到的排名有一部分是 id 运气。</p>
+        <p>这解释了为什么薪资分（连续的 0–15 区间值）比技能分（0/13.3/26.7/40 的阶梯）更能破缺。如果想降低破缺，优先精细化薪资 / 地点这类连续打分，或者引入次级排序键（如相似度、发布时间）。</p>
+      </div>
+      <div class="panel">
+        <h4>技能全命中率 100% —— 召回已经把住了门槛</h4>
+        <p>所有配置的 top-10 必需技能全命中率都是 100%（随机 / 关键词召回除外——那两组 top-10 里大量岗位技能不匹配，导致技能分和平均分一起塌）。向量召回实际上承担了「技能粗筛」的职能，规则层的技能分更多是在已命中的岗位之间做次级排序。这是一个健康的分工，但也意味着：向量模型对技能词的敏感度直接决定了下限。</p>
+      </div>
+      <div class="panel">
+        <h4>薪资覆盖率 66% —— 还有三分之一不合期望</h4>
+        <p>baseline top-10 里 34% 的岗位薪资区间与期望无交集。摘掉薪资分后升到 40%。如果产品目标包含「推荐岗位薪资要能接受」，这个数字偏高。可选手段：把薪资从「加分项」改成「硬过滤」（比如期望下限完全够不到的直接不进召回后处理）、或在 rank_score 里提权。</p>
+      </div>
+      <div class="panel">
+        <h4>多样性 0.69 —— 中等集中</h4>
+        <p>top-10 的公司多样性（1−HHI）0.69，即推荐不算被少数公司霸屏，但也不是充分分散。去掉地点相关项后多样性略降（0.66）——地点偏好本身在制造一定的集中度（同城公司池更小）。随机召回多样性最高（0.87）但质量最差，说明多样性不能靠放松召回来换。</p>
+      </div>
+    </section>
+
+    <section id="s7">
+      <h2><span class="no">07</span>案例拆解</h2>
+      <div class="prose-block">
+        <p>三个真实简历的 top-10 变化，看组件是怎么具体作用于个体用户的。</p>
+      </div>
+
+      <div class="panel">
+        <h4>案例 A · 游戏客户端开发工程师 · 期望 22–34K · 未填城市</h4>
+        <p><small class="muted">resume_id = 1</small></p>
+        <p>baseline top-10：<code>217, 84, 218, 62, 59, 232, 83, 7, 76, 219</code></p>
+        <p>摘掉薪资后：<code>217, 84, 232, 218, 12, 13, 274, 83, 219, 11</code>——头部 4 个还是那批，但 62、59、76 被换成了 12、13、274、11。<b>薪资分对这个用户的作用是「把 34–38K 那批超过期望上限的岗位往下压」</b>。摘掉必需技能 / 地点对 top-10 无影响——这位用户没填城市，地点分是中性 8 分大家都一样；技能本来全命中，摘掉 40 分大家同步减分，相对顺序不变。</p>
+      </div>
+
+      <div class="panel">
+        <h4>案例 B · Java 后端 · 期望 26–38K · 北京</h4>
+        <p><small class="muted">resume_id = 2</small></p>
+        <p>baseline top-10：<code>3, 5, 7, 292, 54, 21, 9, 4, 1, 129</code></p>
+        <p>摘掉薪资：<code>3, 5, 292, 7, 21, 143, 54, 9, 129, 103</code>——岗位 7 从第 3 掉到第 4，143、103 换掉了 4、1。头部稳定，尾部洗牌。</p>
+        <p>摘掉必需技能：<code>5, 3, 54, 143, 131, 9, 4, 1, 129, 103</code>——岗位 7、21、292 出局，143、131、103 进来。<b>技能分决定的是「谁能留在 top-10」，不只是排名先后。</b></p>
+        <p>摘掉地点：<code>3, 5, 7, 292, 21, 4, 1, 129, 103, 121</code>——54 出局、121 进来，头部 5 个不动。地点分对这个北京用户是微调不是洗牌。</p>
+      </div>
+
+      <div class="panel">
+        <h4>案例 C · Python 后端 · 期望 22–32K · 上海</h4>
+        <p><small class="muted">resume_id = 3</small></p>
+        <p>baseline top-10：<code>268, 1, 48, 2, 10, 9, 112, 129, 103, 121</code></p>
+        <p>摘掉薪资：<code>268, 1, 2, 10, 48, 112, 129, 103, 121, 138</code>——头部两岗位不动，48 从第 3 掉到第 5，138 递补进来。薪资分主要在中间段洗牌。</p>
+        <p>摘掉必需技能：<code>48, 43, 1, 268, 9, 10, 112, 129, 103, 121</code>——岗位 2、62 出局，43 进来且跳到第 2。<b>技能分一摘，原来进不了 top-10 的岗位立刻顶上来。</b></p>
+        <p>摘掉地点：<code>268, 1, 112, 129, 103, 121, 138, 48, 2, 3</code>——岗位 10、9 出局，138、3 进来，且 112 这批上海外岗位前移。<b>对填了上海的用户，地点分是把外地岗位往下压的主要力量。</b></p>
+      </div>
+
+      <div class="timeline">
+        <div class="tl-step">
+          <div class="tl-no">召回</div>
+          <div class="tl-body"><div class="tt">决定候选池 = 决定上限</div><div class="tx">向量召回 vs 关键词 / 随机：top-10 完全不同。召回不看地点意向，是城市命中率的 hard cap。</div></div>
+        </div>
+        <div class="tl-step">
+          <div class="tl-no">必需技能</div>
+          <div class="tl-body"><div class="tt">决定谁能留在 top-10</div><div class="tx">40 分的大分差，是进出 top-10 的门槛信号。</div></div>
+        </div>
+        <div class="tl-step">
+          <div class="tl-no">薪资 / 地点 / 年限</div>
+          <div class="tl-body"><div class="tt">决定留下的人怎么排</div><div class="tx">薪资管破缺最狠，地点管城市命中，年限居中。</div></div>
+        </div>
+        <div class="tl-step">
+          <div class="tl-no">方向加权</div>
+          <div class="tl-body"><div class="tt">当前不改变任何人的 top-10</div><div class="tx">×0.5 后最多 ±5 分，淹没在技能 / 地点分差里。</div></div>
+        </div>
+        <div class="tl-step">
+          <div class="tl-no">地点降权</div>
+          <div class="tl-body"><div class="tt">城市不符时的重罚</div><div class="tx">去掉它，城市命中率 −7 个百分点。是排序加权层唯一实际作用项。</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="s8">
+      <h2><span class="no">08</span>建议与边界</h2>
+      <div class="prose-block">
+        <p class="lede">如果只做三件事：把意向城市加进召回过滤、给薪资加一道下限硬过滤、给方向加权换一种生效方式。其他都是打磨。</p>
+        <h3>按投入产出排序的建议</h3>
+        <p><b>1. 召回层加地点意向过滤。</b>关键词召回城市命中 0% 不是算法问题，是召回根本不看地点。向量召回可以保留语义主通道，但在取 top 20 之前先按意向城市分桶（比如每个意向城市保底若干名额），否则异地用户的「城市命中率 44%」就是天花板。</p>
+        <p><b>2. 薪资从纯加分改成「下限硬过滤 + 区间内加分」。</b>期望下限完全够不到的岗位（job_max < expect_min）直接不进精排，省下的 15 分权重用来在「能覆盖期望」的岗位里做精细排序。当前 66% 的覆盖率说明有相当一部分召回结果本来就不该出现在 top-10。</p>
+        <p><b>3. 方向加权要么提权、要么改成同分破缺键。</b>×0.5 后对 top-10 零影响的组件，留着只是心理安慰。改成 rank_score 同分时的第一排序键，成本最低、至少能解决「设了方向却看到不对口岗位」的观感问题。</p>
+        <p><b>4. 降同分破缺。</b>35% 的相邻同分率意味着三分之一的排名是 id 决定的。引入次级排序键（相似度、发布时间、公司多样性约束）比调权重更能改善「刷新一下顺序就变」的体验。</p>
+        <p><b>5. 加分技能分（10 分）可以接受现状。</b>它对排序几乎无影响，但可能在「两个岗位其他全同」的角落场景起作用。不值得为它单独调参。</p>
+
+        <h3>实验边界</h3>
+        <p>样本是库里前 40 名有向量、有结构化技能的求职者简历，不是全体 95 人；top-10 / top-20 的指标对小样本均值敏感；「随机召回」是确定性洗牌对照，不是多次采样均值；反馈偏置未测（<code>job_feedback</code> 表 0 行）；薪资覆盖率用的是「区间有交集」的宽松定义，不是「完全覆盖期望」；方向加权的零影响结论仅适用于这 40 人当前的方向设置密度，如果全量用户都认真填了方向，结论可能不同。</p>
+        <p>复现：<code>python .openclaw/tmp/run_ablation.py</code>，原始数据 <code>.openclaw/tmp/ablation.json</code>。</p>
+        <p class="muted"><small>2026-11-25 后续：按本报告顺序已落地 4 项修复（意向城市召回配额 / 薪资下限硬过滤 / 方向改同分破缺键 / 相似度次级排序）。修复后线上对比：薪资覆盖率 65.8% → 79.0%，城市命中 43.9% → 57.4%，同分破缺 34.7% → 30.1%，薪资下限漏网 0。详见 <code>.openclaw/tmp/compare_old_new.py</code>。</small></p>
+      </div>
+    </section>
+
+    <footer class="colophon">
+      JobCopilot matching ablation · 40 seekers × 322 jobs · 12 configs<br />
+      baseline = vector recall top-20 + rules(50/20/15/15) + direction×0.5 + location penalty<br />
+      generated 2026-11-25 · script: .openclaw/tmp/run_ablation.py
+    </footer>
+  </main>
+</div>
+
+<script>
+  // 侧栏高亮当前章节
+  const links = document.querySelectorAll('.sidebar nav a');
+  const secs = [...document.querySelectorAll('section[id]')];
+  const onScroll = () => {
+    const y = window.scrollY + 120;
+    let cur = secs[0];
+    for (const s of secs) { if (s.offsetTop <= y) cur = s; }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur.id));
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+</script>
+</body>
+</html>

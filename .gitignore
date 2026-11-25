@@ -32,3 +32,16 @@ preview/
 
 # --- 测试产物（可由 seed_data 下的 Markdown 重新生成，不入库） ---
 seed_data/resumes_pdf/
+
+# --- OpenClaw Agent 工作区文件（框架自动生成的脚手架，不属于项目） ---
+SOUL.md
+USER.md
+IDENTITY.md
+HEARTBEAT.md
+TOOLS.md
+AGENTS.md
+BOOTSTRAP.md
+MEMORY.md
+memory/
+.openclaw/
+.openclaw-attachments/
