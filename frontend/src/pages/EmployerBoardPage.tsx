@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, fetchBlob } from "../lib/api";
 import type { Candidate, Job } from "../lib/types";
@@ -136,6 +136,7 @@ function CandidateCard({
 
 export function EmployerBoardPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -434,6 +435,18 @@ export function EmployerBoardPage() {
                 </Badge>
               )}
               <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!selected.conversation_id}
+                  onClick={() => {
+                    if (selected.conversation_id) {
+                      navigate(`/employer/messages?c=${selected.conversation_id}`);
+                    }
+                  }}
+                >
+                  发消息
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"

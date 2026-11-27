@@ -223,6 +223,7 @@ export interface Application {
 export interface Candidate {
   application_id: number;
   user_id: number;
+  conversation_id: number | null;
   job_id: number;
   job_title: string;
   candidate_name: string;
@@ -360,7 +361,7 @@ export interface Interview {
   job_title: string;
   company_name: string;
   application_id: number | null;
-  status: "in_progress" | "completed" | "draft";
+  status: "in_progress" | "completed";
   plan: { questions: InterviewQuestion[] };
   answers: InterviewAnswer[];
   report: InterviewReport | null;
@@ -400,12 +401,14 @@ export interface Subscription {
 
 export interface ConversationSummary {
   id: number;
-  application_id: number;
-  job_id: number;
+  application_id: number | null;
+  company_id: number | null;
+  job_id: number | null;
   job_title: string;
   company_name: string;
   candidate_name: string;
   other_name: string;
+  source: "application" | "direct";
   unread: number;
   last_message: {
     content: string;
@@ -415,10 +418,15 @@ export interface ConversationSummary {
   } | null;
 }
 
+export type ChatMessageKind = "text" | "interview_invite" | "offer";
+
 export interface ChatMessage {
   id: number;
   conversation_id: number;
   content: string;
+  kind: ChatMessageKind;
+  ref_id: number | null;
+  card: InterviewInvite | Offer | null;
   sender_user_id: number;
   mine: boolean;
   created_at: string;

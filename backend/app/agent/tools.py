@@ -1171,7 +1171,7 @@ EMPLOYER_TOOLS: list[Tool] = [
                 "application_id": {"type": "integer"},
                 "status": {
                     "type": "string",
-                    "enum": ["submitted", "screening", "interview", "offer", "rejected"],
+                    "enum": ["submitted", "screening", "interview", "rejected"],
                 },
                 "note": {"type": "string"},
             },

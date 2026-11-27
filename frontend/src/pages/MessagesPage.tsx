@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { ChatMessage, ConversationSummary } from "../lib/types";
 import { formatShortDateTime } from "../lib/format";
 import { Button, Card, EmptyState, Skeleton, Textarea, cn } from "../components/ui";
+import { MessageCard } from "../components/MessageCard";
 
 function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   if (incoming.length === 0) return current;
@@ -17,6 +19,8 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMes
 export function MessagesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const targetId = Number(searchParams.get("c")) || null;
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
@@ -39,7 +43,13 @@ export function MessagesPage() {
   const items = listQuery.data?.items || [];
   const selected = items.find((item) => item.id === selectedId) || null;
 
+  // 从岗位详情「立即沟通」或候选人看板跳转过来时，直接定位到指定会话
   useEffect(() => {
+    if (targetId) setSelectedId(targetId);
+  }, [targetId]);
+
+  useEffect(() => {
+    if (targetId) return; // 指定会话时不做兜底切换，等列表刷新后仍保留目标
     if (!selectedId && items.length > 0) {
       setSelectedId(items[0].id);
       return;
@@ -47,7 +57,12 @@ export function MessagesPage() {
     if (selectedId && items.length > 0 && !items.some((item) => item.id === selectedId)) {
       setSelectedId(items[0].id);
     }
-  }, [items, selectedId]);
+  }, [items, selectedId, targetId]);
+
+  const selectConversation = (conversationId: number) => {
+    setSelectedId(conversationId);
+    if (targetId) setSearchParams({}, { replace: true });
+  };
 
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
@@ -158,8 +173,8 @@ export function MessagesPage() {
         <h1 className="text-[26px] font-semibold tracking-tight">消息</h1>
         <p className="mt-1 text-xs text-muted">
           {user?.role === "employer"
-            ? "与投递候选人的沟通记录，按投递建立会话。"
-            : "与招聘方的沟通记录，按投递建立会话。"}
+            ? "与候选人的沟通记录，含投递会话与主动联系。"
+            : "与招聘方的沟通记录，可从岗位详情直接发起沟通。"}
         </p>
       </header>
 
@@ -190,7 +205,7 @@ export function MessagesPage() {
               {items.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => setSelectedId(item.id)}
+                  onClick={() => selectConversation(item.id)}
                   className={cn(
                     "flex w-full flex-col gap-1 border-b border-line px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-neutral-soft",
                     item.id === selectedId && "bg-primary-soft",
@@ -206,7 +221,9 @@ export function MessagesPage() {
                       </span>
                     )}
                   </div>
-                  <span className="truncate text-[11px] text-muted">{item.job_title}</span>
+                  <span className="truncate text-[11px] text-muted">
+                    {item.job_title || "主动沟通"}
+                  </span>
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-[11px] text-muted">
                       {item.last_message
@@ -231,7 +248,7 @@ export function MessagesPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{selected.other_name}</p>
                     <p className="mt-0.5 truncate text-[11px] text-muted">
-                      {selected.job_title}
+                      {selected.job_title || "主动沟通"}
                       {selected.company_name && user?.role !== "employer"
                         ? ` · ${selected.company_name}`
                         : ""}
@@ -280,28 +297,36 @@ export function MessagesPage() {
                       )}
                     </div>
                   )}
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={cn("flex", message.mine ? "justify-end" : "justify-start")}
-                    >
+                  {messages.map((message) =>
+                    message.kind !== "text" && message.card ? (
+                      <MessageCard
+                        key={message.id}
+                        message={message}
+                        role={user?.role === "employer" ? "employer" : "seeker"}
+                      />
+                    ) : (
                       <div
-                        className={cn(
-                          "max-w-[78%] rounded-xl border px-3 py-2",
-                          message.mine
-                            ? "border-primary bg-primary-soft text-ink"
-                            : "border-line bg-surface text-ink",
-                        )}
+                        key={message.id}
+                        className={cn("flex", message.mine ? "justify-end" : "justify-start")}
                       >
-                        <p className="whitespace-pre-wrap break-words text-xs leading-relaxed">
-                          {message.content}
-                        </p>
-                        <p className="mt-1 text-[10px] tabular-nums text-muted">
-                          {formatShortDateTime(message.created_at)}
-                        </p>
+                        <div
+                          className={cn(
+                            "max-w-[78%] rounded-xl border px-3 py-2",
+                            message.mine
+                              ? "border-primary bg-primary-soft text-ink"
+                              : "border-line bg-surface text-ink",
+                          )}
+                        >
+                          <p className="whitespace-pre-wrap break-words text-xs leading-relaxed">
+                            {message.content}
+                          </p>
+                          <p className="mt-1 text-[10px] tabular-nums text-muted">
+                            {formatShortDateTime(message.created_at)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ),
+                  )}
                 </div>
 
                 <div className="border-t border-line px-4 py-3">

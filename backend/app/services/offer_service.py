@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Application, ApplicationEvent, Job, Offer, User
 from app.services.notification_service import notify_once
+from app.services import message_service
 from app.utils import to_utc_naive, utcnow
 
 STATUS_LABELS = {
@@ -86,7 +87,7 @@ def create_offer(db: Session, user: User, application_id: int, data: dict) -> Of
 
     offer = get_offer(db, application_id)
     created = offer is None
-    if offer is not None and offer.status != "pending":
+    if offer is not None and _effective_status(offer) != "pending":
         raise OfferError("Offer 已结束（已响应/已撤回/已过期），无法修改；如需重新沟通请先更新投递状态")
 
     if offer is None:
@@ -119,6 +120,15 @@ def create_offer(db: Session, user: User, application_id: int, data: dict) -> Of
         )
 
     db.flush()
+    message_service.post_card(
+        db,
+        application,
+        user.id,
+        "offer",
+        offer.id,
+        f"Offer · {offer.salary_min:g}-{offer.salary_max:g}K"
+        + (f" · 入职 {offer.start_date}" if offer.start_date else ""),
+    )
     if created:
         notify_once(
             db,

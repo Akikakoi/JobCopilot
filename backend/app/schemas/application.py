@@ -8,5 +8,7 @@ class ApplicationCreate(BaseModel):
 
 
 class ApplicationStatusIn(BaseModel):
-    status: str = Field(description="submitted / screening / interview / offer / rejected")
+    status: str = Field(
+        description="submitted / screening / interview / rejected（进入 offer 阶段请使用 Offer 接口）"
+    )
     note: str = ""

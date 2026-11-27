@@ -34,7 +34,7 @@ def _next_username(db) -> str:
         m = re.match(r"cand(\d+)", name)
         if m:
             numbers.append(int(m.group(1)))
-    return f"cand{max(numbers, default=1) + 1:03d}"
+    return f"cand{max(numbers, default=1) + 1:02d}"
 
 
 async def seed_resumes_more() -> int:

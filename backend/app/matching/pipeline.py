@@ -108,11 +108,8 @@ async def match_jobs_for_resume(
         recalled = scored_pairs[:top_n]
 
     # ①½ 薪资下限硬过滤：岗位上限完全够不到期望下限的岗位不进精排。
-    # 测试环境（无真实薪资分布）不拦，避免把 fixture 岗位全部滤掉。
     salary_min = expectations.get("salary_min")
-    salary_max = expectations.get("salary_max")
-    hard_salary = True
-    if hard_salary and salary_min is not None:
+    if salary_min is not None:
         floor = float(salary_min or 0)
         recalled = [
             (sim, job)

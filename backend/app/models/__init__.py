@@ -191,7 +191,7 @@ class Interview(Base):
         ForeignKey("applications.id"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(16), default="in_progress")
-    # draft / in_progress / completed
+    # in_progress / completed
     plan: Mapped[dict] = mapped_column(JSON, default=dict)
     answers: Mapped[list] = mapped_column(JSON, default=list)
     report: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -273,7 +273,7 @@ class InterviewInvite(Base):
     location: Mapped[str] = mapped_column(String(255), default="")  # 地址或会议链接
     note: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(16), default="pending")
-    # pending / confirmed / declined / cancelled
+    # pending / confirmed / declined / cancelled / completed
     candidate_note: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -299,7 +299,7 @@ class Offer(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     note: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(16), default="pending")
-    # pending / accepted / declined / expired
+    # pending / accepted / declined / expired / withdrawn
     response_note: Mapped[str] = mapped_column(Text, default="")
     responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -309,16 +309,28 @@ class Offer(Base):
 
 
 class Conversation(Base):
-    """围绕一条投递的一对一会话，双方为候选人与岗位所属招聘方。"""
+    """候选人与招聘方的一对一会话。
+
+    application_id 为空表示「沟通先于投递」：求职者从岗位详情直接发起，或招聘方主动联系。
+    投递后若已存在同公司同候选人的直接会话，会复用该会话并回填 application_id。
+    """
 
     __tablename__ = "conversations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    application_id: Mapped[int] = mapped_column(
-        ForeignKey("applications.id"), unique=True, index=True
+    application_id: Mapped[int | None] = mapped_column(
+        ForeignKey("applications.id"), unique=True, index=True, nullable=True
+    )
+    company_id: Mapped[int | None] = mapped_column(
+        ForeignKey("companies.id"), index=True, nullable=True
+    )
+    job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("jobs.id"), index=True, nullable=True
     )
     seeker_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     employer_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    source: Mapped[str] = mapped_column(String(16), default="application")
+    # application / direct
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
@@ -334,6 +346,10 @@ class Message(Base):
     )
     sender_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     content: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(String(16), default="text")
+    # text / interview_invite / offer
+    ref_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # kind 对应实体 id（interview_invites.id / offers.id），读取时实时补全卡片状态
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

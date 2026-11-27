@@ -268,6 +268,18 @@ def test_offer_expiry_is_presented_and_rejected(client):
     assert created.json()["data"]["status"] == "expired"
     assert created.json()["data"]["status_label"] == "已过期"
 
+    edit = client.post(
+        f"/api/applications/{application['id']}/offer",
+        json={
+            "salary_min": 25,
+            "salary_max": 30,
+            "expires_at": "2030-01-01T00:00:00",
+        },
+        headers=auth(employer["access_token"]),
+    )
+    assert edit.status_code == 400
+    assert "过期" in edit.json()["message"]
+
     respond = client.post(
         f"/api/applications/{application['id']}/offer/respond",
         json={"action": "accept"},

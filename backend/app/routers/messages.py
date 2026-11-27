@@ -1,14 +1,80 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import require_role
-from app.models import User
+from app.models import InterviewInvite, Offer, User
 from app.schemas.common import ok
-from app.schemas.message import MessageIn
-from app.services import message_service
+from app.schemas.message import ConversationStartIn, MessageIn
+from app.services import interview_invite_service, message_service, offer_service
 
 router = APIRouter(prefix="/conversations", tags=["messages"])
+
+
+def _attach_cards(db: Session, items: list[dict]) -> None:
+    """卡片消息只存 kind + ref_id，读取时补全邀约 / Offer 的实时状态。"""
+    invite_ids = {
+        item["ref_id"]
+        for item in items
+        if item["kind"] == "interview_invite" and item["ref_id"]
+    }
+    offer_ids = {
+        item["ref_id"] for item in items if item["kind"] == "offer" and item["ref_id"]
+    }
+    invites = (
+        {
+            invite.id: interview_invite_service.invite_to_dict(invite)
+            for invite in db.scalars(
+                select(InterviewInvite).where(InterviewInvite.id.in_(invite_ids))
+            )
+        }
+        if invite_ids
+        else {}
+    )
+    offers = (
+        {
+            offer.id: offer_service.offer_to_dict(offer)
+            for offer in db.scalars(select(Offer).where(Offer.id.in_(offer_ids)))
+        }
+        if offer_ids
+        else {}
+    )
+    for item in items:
+        if item["kind"] == "interview_invite":
+            item["card"] = invites.get(item["ref_id"])
+        elif item["kind"] == "offer":
+            item["card"] = offers.get(item["ref_id"])
+        else:
+            item["card"] = None
+
+
+@router.post("")
+def start_conversation(
+    payload: ConversationStartIn,
+    user: User = Depends(require_role("seeker", "employer")),
+    db: Session = Depends(get_db),
+):
+    """发起沟通：求职者传 job_id / company_id，招聘方传 seeker_user_id（可带 job_id）。"""
+    try:
+        conversation, created = message_service.start_conversation(
+            db,
+            user,
+            job_id=payload.job_id,
+            company_id=payload.company_id,
+            seeker_user_id=payload.seeker_user_id,
+        )
+    except message_service.MessageError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ok(
+        {
+            "id": conversation.id,
+            "created": created,
+            "application_id": conversation.application_id,
+            "job_id": conversation.job_id,
+        },
+        message="已发起沟通" if created else "已存在会话",
+    )
 
 
 @router.get("")
@@ -49,6 +115,7 @@ def list_messages(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    _attach_cards(db, items)
     return ok({"items": items, "has_more": has_more})
 
 

@@ -20,7 +20,7 @@ class JobCreate(BaseModel):
     job_type: str = "全职"
     salary_min: float = Field(default=0, ge=0)
     salary_max: float = Field(default=0, ge=0)
-    status: str = "open"
+    status: Literal["open", "closed"] = "open"
 
     @field_validator("required_skills", "preferred_skills")
     @classmethod
@@ -46,7 +46,7 @@ class JobUpdate(BaseModel):
     job_type: str | None = None
     salary_min: float | None = None
     salary_max: float | None = None
-    status: str | None = None
+    status: Literal["open", "closed"] | None = None
 
     @field_validator("required_skills", "preferred_skills")
     @classmethod

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "../lib/api";
 import type { Job, MatchDetail } from "../lib/types";
@@ -173,10 +173,12 @@ function MatchPanel({ detail, loading, error }: { detail?: MatchDetail; loading:
 
 export function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [applyOpen, setApplyOpen] = useState(false);
   const [coverLetter, setCoverLetter] = useState("");
   const [applyError, setApplyError] = useState("");
+  const [chatError, setChatError] = useState("");
   const [applied, setApplied] = useState(false);
 
   const jobQuery = useQuery({
@@ -211,6 +213,21 @@ export function JobDetailPage() {
   const toggleFeedback = (action: "save" | "dislike") => {
     feedbackMutation.mutate(feedbackAction === action ? "clear" : action);
   };
+
+  const startChatMutation = useMutation({
+    mutationFn: () =>
+      api.post<{ id: number; created: boolean }>("/conversations", {
+        job_id: Number(id),
+      }),
+    onSuccess: (data) => {
+      setChatError("");
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      navigate(`/seeker/messages?c=${data.id}`);
+    },
+    onError: (error) => {
+      setChatError(error instanceof ApiError ? error.message : "发起沟通失败，请重试");
+    },
+  });
 
   const applyMutation = useMutation({
     mutationFn: () =>
@@ -331,7 +348,13 @@ export function JobDetailPage() {
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
               <p className="text-xs text-muted">
-                {isApplied ? "你已投递该岗位，可在「我的投递」查看进度" : "投递后招聘方会看到你的匹配分与解读"}
+                {chatError ? (
+                  <span className="text-danger">{chatError}</span>
+                ) : isApplied ? (
+                  "你已投递该岗位，可在「我的投递」查看进度"
+                ) : (
+                  "可以先和招聘方沟通，再决定是否投递"
+                )}
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -357,6 +380,17 @@ export function JobDetailPage() {
                 >
                   {feedbackAction === "dislike" ? "已标记不感兴趣" : "不感兴趣"}
                 </button>
+                <Button
+                  variant="soft"
+                  onClick={() => {
+                    setChatError("");
+                    startChatMutation.mutate();
+                  }}
+                  loading={startChatMutation.isPending}
+                  disabled={job.status !== "open"}
+                >
+                  立即沟通
+                </Button>
                 <Button
                   onClick={() => {
                     setApplyError("");

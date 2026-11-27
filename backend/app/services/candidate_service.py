@@ -5,10 +5,17 @@ from app.matching import pipeline
 from app.matching.rules import score_resume_job
 from app.models import Application, Company, Job, Resume, User
 from app.utils import cosine_similarity
-from app.services import application_service, interview_invite_service, offer_service
+from app.services import (
+    application_service,
+    interview_invite_service,
+    message_service,
+    offer_service,
+)
 
 
-def _candidate_item(db: Session, application: Application, job: Job | None) -> dict | None:
+def _candidate_item(
+    db: Session, application: Application, job: Job | None, conversation_id: int | None = None
+) -> dict | None:
     if job is None:
         return None
     resume = db.get(Resume, application.resume_id)
@@ -24,6 +31,7 @@ def _candidate_item(db: Session, application: Application, job: Job | None) -> d
     return {
         "application_id": application.id,
         "user_id": application.user_id,
+        "conversation_id": conversation_id,
         "job_id": job.id,
         "job_title": job.title,
         "candidate_name": (resume.structured or {}).get("name")
@@ -62,9 +70,12 @@ async def rank_candidates(db: Session, user: User, job_id: int) -> list[dict]:
         return []
     await pipeline.ensure_job_embeddings(db, [job])
 
+    conversation_ids = message_service.ensure_conversation_ids(db, applications)
     items: list[dict] = []
     for application in applications:
-        item = _candidate_item(db, application, job)
+        item = _candidate_item(
+            db, application, job, conversation_ids.get(application.id)
+        )
         if item is not None:
             items.append(item)
     items.sort(key=lambda item: item["match_score"], reverse=True)
@@ -93,9 +104,15 @@ async def rank_all_candidates(db: Session, user: User) -> list[dict]:
     }
     await pipeline.ensure_job_embeddings(db, list(jobs.values()))
 
+    conversation_ids = message_service.ensure_conversation_ids(db, applications)
     items: list[dict] = []
     for application in applications:
-        item = _candidate_item(db, application, jobs.get(application.job_id))
+        item = _candidate_item(
+            db,
+            application,
+            jobs.get(application.job_id),
+            conversation_ids.get(application.id),
+        )
         if item is not None:
             items.append(item)
     items.sort(key=lambda item: item["match_score"], reverse=True)

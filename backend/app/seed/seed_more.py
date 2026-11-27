@@ -1,7 +1,7 @@
 """增量灌库：把 seed_data/jobs 下尚未入库的岗位追加进现有数据库。
 
 与 app.seed.seed 的区别：不 drop、不重建、不动用户/简历/投递/会话，
-只做「新岗位 → 找到/建对应公司 → 生成向量 → 入库」。
+只做「新岗位 → 找到/建对应公司（含招聘方账号）→ 生成向量 → 入库」。
 幂等：按（公司 + 标题 + 城市）去重，重复运行不会重复插入。
 
 运行：cd backend && .venv/Scripts/python.exe -m app.seed.seed_more
@@ -12,8 +12,9 @@ import sys
 
 from app.db import SessionLocal, init_db
 from app.llm.client import embed_texts
-from app.models import Company, Job
-from app.seed.seed import parse_job
+from app.models import Company, Job, User
+from app.security import hash_password
+from app.seed.seed import COMPANY_PINYIN, DEMO_PASSWORD, parse_job
 from app.services.job_service import job_embedding_text
 from pathlib import Path
 
@@ -51,16 +52,40 @@ async def seed_more() -> int:
             industry = row.get("industry") or "互联网"
             company_industries.setdefault(company_name, industry)
 
+        existing_usernames = {row[0] for row in db.query(User.username).all()}
         new_companies: list[Company] = []
+        new_accounts: list[str] = []
         for name, industry in company_industries.items():
-            if name and name not in existing_companies:
-                new_companies.append(Company(name=name, industry=industry))
+            if not name or name in existing_companies:
+                continue
+            base = COMPANY_PINYIN.get(
+                name, f"company-{len(existing_companies) + len(new_companies) + 1:02d}"
+            )
+            username = base
+            suffix = 2
+            while username in existing_usernames:
+                username = f"{base}-{suffix}"
+                suffix += 1
+            existing_usernames.add(username)
+            owner = User(
+                username=username,
+                password_hash=hash_password(DEMO_PASSWORD),
+                role="employer",
+                display_name=f"{name} HR",
+            )
+            db.add(owner)
+            db.flush()
+            new_companies.append(
+                Company(owner_user_id=owner.id, name=name, industry=industry)
+            )
+            new_accounts.append(username)
         if new_companies:
             db.add_all(new_companies)
             db.commit()
             for c in new_companies:
                 existing_companies[c.name] = c
             print(f"新公司 {len(new_companies)} 家：{[c.name for c in new_companies]}")
+            print(f"新招聘方账号（密码 {DEMO_PASSWORD}）：{new_accounts}")
 
         if not pending_rows:
             print("没有待入库的新岗位")

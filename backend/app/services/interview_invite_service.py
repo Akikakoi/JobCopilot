@@ -13,6 +13,7 @@ from app.models import (
     User,
 )
 from app.services.notification_service import notify_once
+from app.services import message_service
 from app.utils import to_utc_naive, utcnow
 
 STATUS_LABELS = {
@@ -148,6 +149,14 @@ def create_invite(
         )
 
     db.flush()
+    message_service.post_card(
+        db,
+        application,
+        user.id,
+        "interview_invite",
+        invite.id,
+        f"面试邀约 · 第 {invite.round} 轮 · {MODE_LABELS.get(invite.mode, invite.mode)}",
+    )
     notify_once(
         db,
         application.user_id,
